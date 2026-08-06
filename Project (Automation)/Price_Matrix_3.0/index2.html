@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Price Ledger — Store Analytics & Comparison</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3ead8;
+    --paper-raised: #f9f4e8;
+    --paper-deep: #ece0c5;
+    --ink: #22201a;
+    --ink-soft: #6d6350;
+    --ink-faint: #a89c81;
+    --rule: #c7b78e;
+    --rule-faint: #ddd0ab;
+    --gold: #a97e2c;
+    --oxblood: #7c2a20;
+    --forest: #276749;
+    --amazon-color: #d97706;
+    --flipkart-color: #2563eb;
+    --link-blue: #1d4ed8;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    background-image: linear-gradient(var(--rule-faint) 1px, transparent 1px);
+    background-size: 100% 2rem;
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .sheet {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 4rem;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-bottom: 1rem;
+    border-bottom: 3px double var(--ink);
+  }
+
+  .brand-sub {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 3rem;
+    line-height: 0.95;
+    margin: 0.2rem 0 0;
+  }
+  h1 em { font-style: italic; color: var(--oxblood); }
+
+  .entry-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    box-shadow: 0 4px 20px -10px rgba(34,32,26,0.15);
+    padding: 1.5rem;
+    margin: 1.8rem 0;
+    position: relative;
+  }
+
+  .entry-label {
+    position: absolute;
+    top: -0.55rem;
+    left: 1.2rem;
+    background: var(--paper);
+    padding: 0 0.5rem;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 100px auto;
+    gap: 1.2rem;
+    align-items: end;
+  }
+
+  label {
+    display: block;
+    font-size: 0.63rem;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 0.3rem;
+  }
+
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    background: transparent;
+    border: 1px solid var(--rule);
+    padding: 0.35rem 0.5rem;
+    color: var(--ink);
+  }
+  
+  .entry-card input[type="text"], .entry-card input[type="number"] {
+    font-family: 'Fraunces', serif;
+    font-size: 1.15rem;
+    border: none;
+    border-bottom: 1.5px solid var(--rule);
+    padding: 0.2rem 0.05rem;
+  }
+
+  input:focus, select:focus { outline: none; border-color: var(--oxblood); }
+
+  button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    padding: 0.7rem 1.4rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  button:hover:not(:disabled) { background: var(--oxblood); transform: translateY(-1px); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.8rem;
+  }
+
+  .kpi-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    padding: 1rem 1.2rem;
+    border-left: 4px solid var(--gold);
+  }
+  .kpi-card.amz { border-left-color: var(--amazon-color); }
+  .kpi-card.fk { border-left-color: var(--flipkart-color); }
+  .kpi-card.best { border-left-color: var(--forest); }
+
+  .kpi-val {
+    font-family: 'Fraunces', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .kpi-label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-top: 0.2rem;
+    letter-spacing: 0.08em;
+  }
+
+  .status-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.8rem; }
+  .seal {
+    width: 50px; height: 50px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 0.6rem;
+    text-transform: uppercase; color: var(--paper); background: var(--ink-faint);
+  }
+  .seal.running { background: var(--gold); animation: pulse 1.5s infinite; }
+  .seal.done { background: var(--forest); }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  section.panel { background: var(--paper-raised); border: 1px solid var(--rule); margin-bottom: 1.8rem; }
+  
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .table-controls {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--paper-deep);
+    border-bottom: 1px solid var(--rule-faint);
+  }
+
+  .control-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    align-items: center;
+  }
+
+  .filter-btn {
+    font-size: 0.65rem;
+    padding: 0.35rem 0.7rem;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    cursor: pointer;
+  }
+  .filter-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  .filter-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+  }
+
+  .filter-input-wrap input {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+
+  #log { height: 130px; overflow-y: auto; padding: 0.7rem 1rem; font-size: 0.76rem; white-space: pre-wrap; }
+
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead th {
+    text-align: left;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    padding: 0.7rem 0.8rem;
+    border-bottom: 2px solid var(--ink);
+    background: var(--paper-raised);
+  }
+  tbody td { padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--rule-faint); vertical-align: middle; }
+  tbody tr:hover { background: rgba(169, 126, 44, 0.08); }
+  td.num { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  a.product-link {
+    color: var(--link-blue) !important;
+    text-decoration: underline !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+  }
+  a.product-link:hover { color: var(--oxblood) !important; }
+
+  .badge {
+    padding: 0.2rem 0.5rem; font-size: 0.62rem; font-weight: 600;
+    border-radius: 3px; color: #fff; text-transform: uppercase; display: inline-block;
+  }
+  .badge-amazon { background: var(--amazon-color); }
+  .badge-flipkart { background: var(--flipkart-color); }
+
+  .rating-pill {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    background: rgba(39, 103, 73, 0.12);
+    color: var(--forest);
+    font-weight: 600;
+    border-radius: 3px;
+  }
+
+  .diff-tag { font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 3px; }
+  .diff-cheaper { color: var(--forest); background: rgba(39, 103, 73, 0.12); }
+  .diff-pricier { color: var(--oxblood); background: rgba(124, 42, 32, 0.12); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header>
+    <div>
+      <div class="brand-sub">Comparative E-Commerce Engine</div>
+      <h1>Price <em>Matrix</em></h1>
+    </div>
+  </header>
+
+  <div class="entry-card">
+    <span class="entry-label">Store Search Setup</span>
+    <div class="field-row">
+      <div>
+        <label for="query">Search Product</label>
+        <!-- <input type="text" id="query" value=""> -->
+        <input type="text" id="query" placeholder="Type here..." autofocus>
+      </div>
+      <div>
+        <label for="pages">Pages / Store</label>
+        <input type="number" id="pages" value="2" min="1" max="10">
+      </div>
+      <div>
+        <button id="runBtn">Compare</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div id="seal" class="seal">Idle</div>
+    <div>
+      <div id="statusTitle" style="font-weight: 600;">System Ready</div>
+      <div id="progressNote" style="font-size: 0.75rem; color: var(--ink-soft);"></div>
+    </div>
+    <span style="flex:1"></span>
+    <button id="downloadBtn" class="ghost" disabled>Download CSV</button>
+  </div>
+
+  <div id="kpiContainer" class="kpi-grid" style="display:none;">
+    <div class="kpi-card">
+      <div id="kpiTotal" class="kpi-val">0</div>
+      <div class="kpi-label">Total Listings Parsed</div>
+    </div>
+    <div class="kpi-card amz">
+      <div id="kpiAmzMin" class="kpi-val">₹0</div>
+      <div class="kpi-label">Amazon Min Price</div>
+    </div>
+    <div class="kpi-card fk">
+      <div id="kpiFkMin" class="kpi-val">₹0</div>
+      <div class="kpi-label">Flipkart Min Price</div>
+    </div>
+    <div class="kpi-card best">
+      <div id="kpiBestStore" class="kpi-val">—</div>
+      <div class="kpi-label">Cheapest Platform</div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">Scraper Execution Output</div>
+    <div id="log"><div style="color:var(--ink-faint)">Awaiting search command...</div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <span>Market Comparison Matrix</span>
+      <span id="rowCountLabel" style="color: var(--ink-soft);"></span>
+    </div>
+
+    <div id="controlsWrap" class="table-controls" style="display:none;">
+      <div class="control-group">
+        <span style="font-size: 0.65rem; text-transform: uppercase; color: var(--ink-soft); font-weight:600;">Store:</span>
+        <button class="filter-btn active" onclick="setPlatformFilter('all', this)">All</button>
+        <button class="filter-btn" onclick="setPlatformFilter('Amazon', this)">Amazon</button>
+        <button class="filter-btn" onclick="setPlatformFilter('Flipkart', this)">Flipkart</button>
+
+        <span style="font-size: 0.65rem; text-transform: uppercase; color: var(--ink-soft); font-weight:600; margin-left: 0.5rem;">Sort:</span>
+        <select id="sortSelect" onchange="applyFiltersAndRender()" style="width: auto;">
+          <option value="default">Default Order</option>
+          <option value="asc">Cheapest to Costliest</option>
+          <option value="desc">Costliest to Cheapest</option>
+        </select>
+      </div>
+
+      <div class="control-group" style="justify-content: flex-end;">
+        <div class="filter-input-wrap">
+          <span>Min ₹:</span>
+          <input type="number" id="minPriceInput" placeholder="0" style="width: 80px;" oninput="applyFiltersAndRender()">
+        </div>
+
+        <div class="filter-input-wrap">
+          <span>Max ₹:</span>
+          <input type="number" id="maxPriceInput" placeholder="Max" style="width: 80px;" oninput="applyFiltersAndRender()">
+        </div>
+
+        <div class="filter-input-wrap">
+          <span>Config / Specs:</span>
+          <input type="text" id="specFilterInput" placeholder="e.g. 16GB, i7, Wireless..." style="width: 170px;" onkeyup="applyFiltersAndRender()">
+        </div>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <div id="resultsWrap" style="padding: 1.5rem; text-align: center; color: var(--ink-soft);">Execute a query to populate comparison table.</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const apiBase = "http://localhost:8787";
+  let pollTimer = null, currentJobId = null, rawData = [];
+  let selectedPlatform = 'all';
+
+  async function startRun() {
+    const query = $('query').value.trim();
+    const pages = parseInt($('pages').value, 10) || 1;
+    if (!query) return alert("Please enter a search query.");
+
+    $('runBtn').disabled = true;
+    $('downloadBtn').disabled = true;
+    $('seal').textContent = "Scanning";
+    $('seal').className = "seal running";
+
+    try {
+      const res = await fetch(apiBase + '/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, pages, headless: true })
+      });
+      if (!res.ok) throw new Error("Server status " + res.status);
+      const data = await res.json();
+      currentJobId = data.job_id;
+      pollTimer = setInterval(pollStatus, 1200);
+    } catch (e) {
+      alert("Backend API not reachable at http://localhost:8787. Make sure your Python Flask/FastAPI server is running!");
+      $('runBtn').disabled = false;
+      $('seal').textContent = "Error";
+      $('seal').className = "seal";
+    }
+  }
+
+  async function pollStatus() {
+    if (!currentJobId) return;
+    try {
+      const res = await fetch(apiBase + '/api/status/' + currentJobId);
+      const job = await res.json();
+
+      if (job.log && Array.isArray(job.log)) {
+        $('log').innerHTML = job.log.map(l => '<div>' + l + '</div>').join('');
+        $('log').scrollTop = $('log').scrollHeight;
+      }
+
+      if (job.status === 'done') {
+        clearInterval(pollTimer);
+        $('seal').textContent = "Done";
+        $('seal').className = "seal done";
+        $('runBtn').disabled = false;
+        $('downloadBtn').disabled = false;
+        rawData = job.data || [];
+        renderDashboard(rawData);
+      }
+    } catch(e) {
+      console.error("Polling error:", e);
+    }
+  }
+
+  function renderDashboard(rows) {
+    if (!rows || !rows.length) return;
+
+    const parseNum = p => parseFloat((p || '').toString().replace(/,/g, ''));
+    const amzPrices = rows.filter(r => r.platform === 'Amazon').map(r => parseNum(r.price)).filter(n => !isNaN(n) && n > 0);
+    const fkPrices = rows.filter(r => r.platform === 'Flipkart').map(r => parseNum(r.price)).filter(n => !isNaN(n) && n > 0);
+
+    const amzMin = amzPrices.length ? Math.min(...amzPrices) : null;
+    const fkMin = fkPrices.length ? Math.min(...fkPrices) : null;
+
+    $('kpiTotal').textContent = rows.length;
+    $('kpiAmzMin').textContent = amzMin ? `₹${amzMin.toLocaleString('en-IN')}` : '—';
+    $('kpiFkMin').textContent = fkMin ? `₹${fkMin.toLocaleString('en-IN')}` : '—';
+    
+    if (amzMin && fkMin) {
+      $('kpiBestStore').textContent = amzMin < fkMin ? "Amazon" : (fkMin < amzMin ? "Flipkart" : "Equal");
+    } else if (amzMin) {
+      $('kpiBestStore').textContent = "Amazon";
+    } else if (fkMin) {
+      $('kpiBestStore').textContent = "Flipkart";
+    } else {
+      $('kpiBestStore').textContent = "—";
+    }
+
+    $('kpiContainer').style.display = 'grid';
+    $('controlsWrap').style.display = 'grid';
+
+    applyFiltersAndRender();
+  }
+
+  window.setPlatformFilter = function(platform, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedPlatform = platform;
+    applyFiltersAndRender();
+  };
+
+  window.applyFiltersAndRender = function() {
+    if (!rawData || !rawData.length) return;
+
+    let filtered = [...rawData];
+
+    // 1. Filter Platform
+    if (selectedPlatform !== 'all') {
+      filtered = filtered.filter(r => r.platform === selectedPlatform);
+    }
+
+    // 2. Filter Config/Specs Keyword
+    const specTerm = ($('specFilterInput').value || '').toLowerCase().trim();
+    if (specTerm) {
+      filtered = filtered.filter(r => String(r.title || '').toLowerCase().includes(specTerm));
+    }
+
+    // 3. Filter Price Min/Max
+    const minVal = parseFloat($('minPriceInput').value);
+    const maxVal = parseFloat($('maxPriceInput').value);
+
+    filtered = filtered.filter(r => {
+      const p = parseFloat(String(r.price || '').replace(/,/g, ''));
+      if (isNaN(p)) return true;
+      if (!isNaN(minVal) && p < minVal) return false;
+      if (!isNaN(maxVal) && p > maxVal) return false;
+      return true;
+    });
+
+    // 4. Sort Price
+    const sortVal = $('sortSelect').value;
+    if (sortVal === 'asc') {
+      filtered.sort((a, b) => {
+        const pA = parseFloat(String(a.price || '0').replace(/,/g, '')) || 0;
+        const pB = parseFloat(String(b.price || '0').replace(/,/g, '')) || 0;
+        return pA - pB;
+      });
+    } else if (sortVal === 'desc') {
+      filtered.sort((a, b) => {
+        const pA = parseFloat(String(a.price || '0').replace(/,/g, '')) || 0;
+        const pB = parseFloat(String(b.price || '0').replace(/,/g, '')) || 0;
+        return pB - pA;
+      });
+    }
+
+    $('rowCountLabel').textContent = `Showing ${filtered.length} of ${rawData.length} Items`;
+    renderTable(filtered);
+  };
+
+  function renderTable(rows) {
+    if (!rows.length) {
+      $('resultsWrap').innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--ink-soft);">No listings match your filter criteria.</div>`;
+      return;
+    }
+
+    let html = `<table><thead><tr>
+      <th>Store</th>
+      <th>Product Title</th>
+      <th class="num">Price (₹)</th>
+      <th class="num">Price Diff</th>
+      <th class="num">Rating</th>
+    </tr></thead><tbody>`;
+
+    rows.forEach(r => {
+      const badgeCls = r.platform === 'Amazon' ? 'badge-amazon' : 'badge-flipkart';
+      const safeTitle = String(r.title || 'Product Link');
+      const targetUrl = r.link || '#';
+      
+      let diffHtml = String(r.price_diff || '—');
+      if (diffHtml.startsWith('-')) {
+        diffHtml = `<span class="diff-tag diff-cheaper">${diffHtml}</span>`;
+      } else if (diffHtml.startsWith('+')) {
+        diffHtml = `<span class="diff-tag diff-pricier">${diffHtml}</span>`;
+      }
+
+      const rawRating = String(r.rating || '').trim();
+      const ratingDisplay = (rawRating && rawRating !== '—' && rawRating !== 'N/A') 
+        ? `<span class="rating-pill">${rawRating} ★</span>` 
+        : '—';
+
+      html += `<tr>
+        <td><span class="badge ${badgeCls}">${r.platform}</span></td>
+        <td>
+          <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="product-link">${safeTitle}</a>
+        </td>
+        <td class="num">₹${r.price || '—'}</td>
+        <td class="num">${diffHtml}</td>
+        <td class="num">${ratingDisplay}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    $('resultsWrap').innerHTML = html;
+  }
+
+  $('runBtn').addEventListener('click', startRun);
+  $('downloadBtn').addEventListener('click', () => {
+    if (currentJobId) window.open(apiBase + '/api/download/' + currentJobId, '_blank');
+  });
+})();
+</script>
+</body>
+</html>
