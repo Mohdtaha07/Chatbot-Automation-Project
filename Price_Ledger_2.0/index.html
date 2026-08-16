@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Price Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3ead8;
+    --paper-deep: #ece0c5;
+    --paper-raised: #f9f4e8;
+    --ink: #22201a;
+    --ink-soft: #6d6350;
+    --ink-faint: #a89c81;
+    --rule: #c7b78e;
+    --rule-faint: #ddd0ab;
+    --gold: #a97e2c;
+    --gold-bright: #c99a3d;
+    --oxblood: #7c2a20;
+    --forest: #33523a;
+  }
+
+  * { box-sizing: border-box; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    background-image:
+      radial-gradient(ellipse at top left, rgba(255,255,255,0.35), transparent 55%),
+      linear-gradient(var(--rule-faint) 1px, transparent 1px);
+    background-size: auto, 100% 2rem;
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* subtle paper grain */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 999;
+  }
+
+  .sheet {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 3rem 2.5rem 4rem;
+  }
+
+  /* ---------- HEADER ---------- */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-bottom: 0.9rem;
+    margin-bottom: 0.3rem;
+    border-bottom: 3px double var(--ink);
+    animation: riseIn 0.6s ease both;
+  }
+
+  .brand-mark {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 0.4rem;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 3rem;
+    line-height: 0.95;
+    margin: 0;
+    letter-spacing: -0.015em;
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--oxblood);
+  }
+
+  .ledger-meta {
+    text-align: right;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    line-height: 1.7;
+  }
+  .ledger-meta .vol { color: var(--ink); font-weight: 600; }
+
+  .tagline {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--ink-soft);
+    font-size: 1.05rem;
+    margin: 1rem 0 2.2rem;
+    animation: riseIn 0.6s ease 0.1s both;
+  }
+
+  /* ---------- ENTRY FORM ---------- */
+  .entry-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    box-shadow: 0 1px 0 var(--rule-faint), 0 8px 24px -18px rgba(34,32,26,0.4);
+    padding: 1.5rem 1.6rem 1.3rem;
+    margin-bottom: 1.8rem;
+    position: relative;
+    animation: riseIn 0.6s ease 0.15s both;
+  }
+
+  .entry-label {
+    position: absolute;
+    top: -0.55rem;
+    left: 1.3rem;
+    background: var(--paper);
+    padding: 0 0.6rem;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 90px auto;
+    gap: 1.3rem;
+    align-items: end;
+  }
+
+  label {
+    display: block;
+    font-size: 0.63rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 0.3rem;
+  }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 1.15rem;
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid var(--rule);
+    padding: 0.2rem 0.05rem 0.35rem;
+    color: var(--ink);
+  }
+  input[type="text"]:focus, input[type="number"]:focus {
+    outline: none;
+    border-bottom-color: var(--oxblood);
+  }
+  input:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1.2rem;
+    padding-top: 0.9rem;
+    border-top: 1px dashed var(--rule);
+    font-size: 0.72rem;
+  }
+  .settings-row .api-base {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink-faint);
+    flex: 1;
+  }
+  .settings-row .api-base input {
+    max-width: 240px;
+    font-size: 0.72rem;
+    font-family: 'IBM Plex Mono', monospace;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .headless-toggle { display: flex; align-items: center; gap: 0.4rem; color: var(--ink-faint); }
+  .headless-toggle input { accent-color: var(--oxblood); }
+
+  /* ---------- BUTTONS ---------- */
+  button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.65rem 1.3rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  button:hover:not(:disabled) { background: var(--oxblood); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { background: var(--rule-faint); color: var(--ink-faint); cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+  button.ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+  button.ghost:hover:not(:disabled) { border-color: var(--oxblood); color: var(--oxblood); background: transparent; }
+  button.ghost:disabled { border-color: var(--rule-faint); }
+
+  /* ---------- STATUS / SEAL ---------- */
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    margin-bottom: 1.9rem;
+    animation: riseIn 0.6s ease 0.2s both;
+  }
+
+  .seal {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+    line-height: 1.15;
+    color: var(--paper);
+    background: var(--ink-faint);
+    border: 2px solid rgba(0,0,0,0.15);
+    box-shadow: inset 0 0 0 3px rgba(255,255,255,0.15), 0 3px 8px -2px rgba(0,0,0,0.35);
+    transform: rotate(-8deg);
+    transition: background 0.3s ease, color 0.3s ease;
+    flex-shrink: 0;
+  }
+  .seal.pulse { animation: stampIn 0.4s cubic-bezier(.2,1.4,.4,1); }
+  .seal.idle { background: var(--ink-faint); }
+  .seal.running { background: var(--gold); animation: throb 1.4s ease-in-out infinite; }
+  .seal.done { background: var(--forest); }
+  .seal.error { background: var(--oxblood); }
+  .seal.cancelled { background: var(--ink-soft); }
+
+  .status-text { display: flex; flex-direction: column; gap: 0.2rem; }
+  .status-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 1.05rem; }
+  .progress-note { font-size: 0.75rem; color: var(--ink-soft); }
+
+  .spacer { flex: 1; }
+
+  /* ---------- TALLY STRIP ---------- */
+  .tally-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--rule);
+    background: var(--paper-raised);
+    margin-bottom: 1.8rem;
+    overflow: hidden;
+  }
+  .tally-cell {
+    padding: 0.9rem 1rem;
+    border-right: 1px solid var(--rule-faint);
+    opacity: 0;
+    animation: riseIn 0.5s ease forwards;
+  }
+  .tally-cell:last-child { border-right: none; }
+  .tally-cell .num {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--ink);
+    display: block;
+  }
+  .tally-cell .lbl {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+  }
+
+  /* ---------- PANELS ---------- */
+  section.panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    margin-bottom: 1.8rem;
+  }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .panel-head .dot { color: var(--gold); margin-right: 0.35rem; }
+
+  #log {
+    height: 210px;
+    overflow-y: auto;
+    padding: 0.7rem 1rem;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #log div { animation: fadeIn 0.25s ease both; }
+  #log .err { color: var(--oxblood); font-weight: 600; }
+  #log .empty { color: var(--ink-faint); font-style: italic; font-family: 'Fraunces', serif; }
+
+  /* histogram */
+  #histogram {
+    padding: 1rem 1rem 0.6rem;
+    border-bottom: 1px solid var(--rule-faint);
+    display: none;
+  }
+  #histogram.show { display: block; }
+  #histogram .hist-label {
+    font-size: 0.63rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 0.5rem;
+  }
+  .hist-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 64px;
+  }
+  .hist-bar {
+    flex: 1;
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    min-height: 3px;
+    transform-origin: bottom;
+    animation: growUp 0.5s ease both;
+    position: relative;
+  }
+  .hist-bar:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 0.62rem;
+    padding: 0.2rem 0.4rem;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+  .hist-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: var(--ink-faint);
+    margin-top: 0.35rem;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  thead th {
+    text-align: left;
+    text-transform: uppercase;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    padding: 0.55rem 1rem;
+    border-bottom: 1.5px solid var(--ink);
+    font-weight: 600;
+  }
+  thead th.num { text-align: right; }
+  thead th.no { width: 3.2rem; }
+  tbody td {
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid var(--rule-faint);
+    vertical-align: top;
+  }
+  tbody tr { opacity: 0; animation: rowIn 0.35s ease forwards; }
+  tbody tr:nth-child(even) { background: rgba(34,32,26,0.02); }
+  tbody tr:hover { background: rgba(169,126,44,0.08); }
+  td.no {
+    font-family: 'Fraunces', serif;
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  td.title a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--rule);
+  }
+  td.title a:hover { border-bottom-color: var(--oxblood); color: var(--oxblood); }
+
+  .results-empty {
+    padding: 2rem 1rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+    text-align: center;
+  }
+
+  footer.hint {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    border-top: 1px dashed var(--rule);
+    padding-top: 1rem;
+    text-align: center;
+  }
+  footer.hint code {
+    background: var(--paper-deep);
+    padding: 0.1rem 0.35rem;
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--rule); }
+
+  @keyframes riseIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes growUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @keyframes stampIn { 0% { transform: rotate(-8deg) scale(1.6); opacity: 0; } 60% { transform: rotate(-8deg) scale(0.92); opacity: 1; } 100% { transform: rotate(-8deg) scale(1); } }
+  @keyframes throb { 0%, 100% { box-shadow: inset 0 0 0 3px rgba(255,255,255,0.15), 0 3px 8px -2px rgba(0,0,0,0.35); } 50% { box-shadow: inset 0 0 0 3px rgba(255,255,255,0.3), 0 3px 14px -2px rgba(169,126,44,0.6); } }
+
+  @media (max-width: 640px) {
+    .sheet { padding: 1.6rem 1.1rem 3rem; }
+    h1 { font-size: 2.1rem; }
+    header { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+    .ledger-meta { text-align: left; }
+    .field-row { grid-template-columns: 1fr; }
+    .tally-strip { grid-template-columns: repeat(2, 1fr); }
+    .tally-cell:nth-child(2) { border-right: none; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header>
+    <div>
+      <div class="brand-mark">Est. this session · No advertisements, ever</div>
+      <h1>Price <em>Ledger</em></h1>
+    </div>
+    <div class="ledger-meta">
+      <div class="vol">Vol. I</div>
+      <div id="todayDate"></div>
+    </div>
+  </header>
+
+  <p class="tagline">Enter a search below. Every listing found is entered as a line in the book.</p>
+
+  <div class="entry-card">
+    <span class="entry-label">New Entry</span>
+    <div class="field-row">
+      <div>
+        <label for="query">Search query</label>
+        <input type="text" id="query" placeholder="e.g. wireless mouse" value="wireless mouse">
+      </div>
+      <div>
+        <label for="pages">Pages</label>
+        <input type="number" id="pages" value="2" min="1" max="50">
+      </div>
+      <div>
+        <button id="runBtn">Run scrape</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <div class="api-base">
+        <span>Backend&nbsp;→</span>
+        <input type="text" id="apiBase" value="http://localhost:8787">
+      </div>
+      <div class="headless-toggle">
+        <input type="checkbox" id="headless" checked>
+        <label for="headless" style="margin:0; text-transform:none; letter-spacing:0;">headless</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div id="seal" class="seal idle">Idle</div>
+    <div class="status-text">
+      <span id="statusTitle" class="status-title">Awaiting entry</span>
+      <span id="progressNote" class="progress-note"></span>
+    </div>
+    <span class="spacer"></span>
+    <button id="cancelBtn" class="ghost" disabled>Cancel</button>
+    <button id="downloadBtn" class="ghost" disabled>Download CSV</button>
+  </div>
+
+  <div id="tallyStrip" class="tally-strip" style="display:none;"></div>
+
+  <section class="panel">
+    <div class="panel-head"><span><span class="dot">●</span>Log</span><span id="jobIdLabel"></span></div>
+    <div id="log"><div class="empty">Nothing running yet — start a scrape above.</div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><span><span class="dot">●</span>Results</span><span id="rowCountLabel"></span></div>
+    <div id="histogram">
+      <div class="hist-label">Price distribution (₹)</div>
+      <div id="histBars" class="hist-bars"></div>
+      <div id="histRange" class="hist-range"></div>
+    </div>
+    <div id="resultsWrap">
+      <div class="results-empty">Results will appear here once the scrape finishes.</div>
+    </div>
+  </section>
+
+  <footer class="hint">
+    Runs against your local <code>app.py</code> — start it with <code>python app.py</code> in the backend folder.
+    This page only calls its <code>/api/*</code> endpoints.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const runBtn = $('runBtn');
+  const cancelBtn = $('cancelBtn');
+  const downloadBtn = $('downloadBtn');
+  const seal = $('seal');
+  const statusTitle = $('statusTitle');
+  const progressNote = $('progressNote');
+  const logEl = $('log');
+  const resultsWrap = $('resultsWrap');
+  const jobIdLabel = $('jobIdLabel');
+  const rowCountLabel = $('rowCountLabel');
+  const tallyStrip = $('tallyStrip');
+  const histogram = $('histogram');
+  const histBars = $('histBars');
+  const histRange = $('histRange');
+
+  $('todayDate').textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+  let pollTimer = null;
+  let currentJobId = null;
+
+  function apiBase() { return $('apiBase').value.trim().replace(/\/+$/, ''); }
+
+  function setSeal(status) {
+    seal.className = 'seal ' + status + ' pulse';
+    const labels = { idle: 'Idle', running: 'Scanning', done: 'Filed', error: 'Failed', cancelled: 'Stopped' };
+    const titles = {
+      idle: 'Awaiting entry', running: 'Scraping in progress', done: 'Entry complete',
+      error: 'Something went wrong', cancelled: 'Run cancelled'
+    };
+    seal.textContent = labels[status] || status;
+    statusTitle.textContent = titles[status] || status;
+    seal.addEventListener('animationend', function handler() {
+      seal.classList.remove('pulse');
+      seal.removeEventListener('animationend', handler);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function renderLog(lines) {
+    if (!lines || lines.length === 0) {
+      logEl.innerHTML = '<div class="empty">Nothing running yet — start a scrape above.</div>';
+      return;
+    }
+    logEl.innerHTML = lines.map(function (line) {
+      const cls = /^ERROR/.test(line) ? ' class="err"' : '';
+      return '<div' + cls + '>' + escapeHtml(line) + '</div>';
+    }).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function parsePrice(p) {
+    const n = parseFloat(String(p).replace(/[^\d.]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  function renderTally(rows, pagesRequested, pagesLabel) {
+    const prices = rows.map(function (r) { return parsePrice(r.price); }).filter(function (n) { return n !== null; });
+    const avg = prices.length ? Math.round(prices.reduce(function (a, b) { return a + b; }, 0) / prices.length) : null;
+    const min = prices.length ? Math.min.apply(null, prices) : null;
+    const max = prices.length ? Math.max.apply(null, prices) : null;
+
+    const cells = [
+      { num: rows.length, lbl: 'Entries filed' },
+      { num: pagesLabel, lbl: 'Pages read' },
+      { num: min !== null ? '₹' + min.toLocaleString('en-IN') : '—', lbl: 'Lowest price' },
+      { num: max !== null ? '₹' + max.toLocaleString('en-IN') : '—', lbl: 'Highest price' }
+    ];
+    tallyStrip.style.display = 'grid';
+    tallyStrip.innerHTML = cells.map(function (c, i) {
+      return '<div class="tally-cell" style="animation-delay:' + (i * 0.06) + 's">' +
+        '<span class="num">' + c.num + '</span><span class="lbl">' + c.lbl + '</span></div>';
+    }).join('');
+
+    return prices;
+  }
+
+  function renderHistogram(prices) {
+    if (!prices || prices.length < 2) { histogram.classList.remove('show'); return; }
+    const min = Math.min.apply(null, prices), max = Math.max.apply(null, prices);
+    if (min === max) { histogram.classList.remove('show'); return; }
+
+    const bucketCount = Math.min(10, Math.max(5, Math.round(Math.sqrt(prices.length))));
+    const step = (max - min) / bucketCount;
+    const buckets = new Array(bucketCount).fill(0);
+    prices.forEach(function (p) {
+      let idx = Math.floor((p - min) / step);
+      if (idx >= bucketCount) idx = bucketCount - 1;
+      if (idx < 0) idx = 0;
+      buckets[idx]++;
+    });
+    const maxCount = Math.max.apply(null, buckets);
+
+    histBars.innerHTML = buckets.map(function (count, i) {
+      const h = maxCount ? Math.max(6, Math.round((count / maxCount) * 64)) : 4;
+      const lo = Math.round(min + i * step);
+      const hi = Math.round(min + (i + 1) * step);
+      return '<div class="hist-bar" style="height:' + h + 'px; animation-delay:' + (i * 0.04) + 's" ' +
+        'data-tip="' + count + ' item' + (count === 1 ? '' : 's') + ' · ₹' + lo + '–' + hi + '"></div>';
+    }).join('');
+    histRange.innerHTML = '<span>₹' + Math.round(min).toLocaleString('en-IN') + '</span><span>₹' + Math.round(max).toLocaleString('en-IN') + '</span>';
+    histogram.classList.add('show');
+  }
+
+  function renderResults(rows) {
+    if (!rows || rows.length === 0) {
+      resultsWrap.innerHTML = '<div class="results-empty">No rows parsed from this run.</div>';
+      rowCountLabel.textContent = '';
+      histogram.classList.remove('show');
+      return;
+    }
+    rowCountLabel.textContent = rows.length + ' row' + (rows.length === 1 ? '' : 's');
+
+    let html = '<table><thead><tr><th class="no">No.</th><th>Title</th><th class="num">Price (₹)</th></tr></thead><tbody>';
+    rows.forEach(function (r, i) {
+      const title = escapeHtml(r.title || '(no title)');
+      const price = r.price ? escapeHtml(r.price) : '—';
+      const link = r.link || '';
+      const entryNo = String(i + 1).padStart(3, '0');
+      html += '<tr style="animation-delay:' + Math.min(i * 0.02, 0.6) + 's">' +
+        '<td class="no">' + entryNo + '</td>' +
+        '<td class="title">' + (link ? '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener">' + title + '</a>' : title) + '</td>' +
+        '<td class="num">' + price + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    resultsWrap.innerHTML = html;
+  }
+
+  async function startRun() {
+    const query = $('query').value.trim();
+    const pages = parseInt($('pages').value, 10) || 1;
+    const headless = $('headless').checked;
+
+    if (!query) { alert('Enter a search query first.'); return; }
+
+    runBtn.disabled = true;
+    cancelBtn.disabled = false;
+    downloadBtn.disabled = true;
+    setSeal('running');
+    progressNote.textContent = 'starting…';
+    renderLog([]);
+    tallyStrip.style.display = 'none';
+    histogram.classList.remove('show');
+    resultsWrap.innerHTML = '<div class="results-empty">Waiting for the scrape to finish…</div>';
+
+    try {
+      const res = await fetch(apiBase() + '/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, pages: pages, headless: headless })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'request failed');
+      currentJobId = data.job_id;
+      jobIdLabel.textContent = 'job ' + currentJobId;
+      pollTimer = setInterval(pollStatus, 1200);
+    } catch (err) {
+      setSeal('error');
+      progressNote.textContent = '';
+      renderLog(['ERROR: could not reach backend — ' + err.message,
+                  'Check that app.py is running and the backend URL above is correct.']);
+      runBtn.disabled = false;
+      cancelBtn.disabled = true;
+    }
+  }
+
+  async function pollStatus() {
+    if (!currentJobId) return;
+    try {
+      const res = await fetch(apiBase() + '/api/status/' + currentJobId);
+      const job = await res.json();
+      if (!res.ok) throw new Error(job.error || 'status request failed');
+
+      renderLog(job.log);
+      progressNote.textContent = job.pages ? ('page ' + (job.progress || 0) + ' / ' + job.pages) : '';
+
+      if (job.status === 'running') {
+        setSeal('running');
+      } else if (job.status === 'done') {
+        clearInterval(pollTimer);
+        setSeal('done');
+        progressNote.textContent = (job.row_count != null ? job.row_count + ' rows parsed' : '');
+        runBtn.disabled = false;
+        cancelBtn.disabled = true;
+        downloadBtn.disabled = false;
+        renderResults(job.data);
+        const prices = renderTally(job.data || [], job.pages, job.pages);
+        renderHistogram(prices);
+      } else if (job.status === 'error') {
+        clearInterval(pollTimer);
+        setSeal('error');
+        runBtn.disabled = false;
+        cancelBtn.disabled = true;
+      } else if (job.status === 'cancelled') {
+        clearInterval(pollTimer);
+        setSeal('cancelled');
+        runBtn.disabled = false;
+        cancelBtn.disabled = true;
+      }
+    } catch (err) {
+      clearInterval(pollTimer);
+      setSeal('error');
+      renderLog([logEl.innerText, 'ERROR: lost connection to backend — ' + err.message]);
+      runBtn.disabled = false;
+      cancelBtn.disabled = true;
+    }
+  }
+
+  async function cancelRun() {
+    if (!currentJobId) return;
+    cancelBtn.disabled = true;
+    try { await fetch(apiBase() + '/api/jobs/' + currentJobId + '/cancel', { method: 'POST' }); }
+    catch (err) { /* best effort */ }
+  }
+
+  function downloadCsv() {
+    if (!currentJobId) return;
+    window.open(apiBase() + '/api/download/' + currentJobId, '_blank');
+  }
+
+  runBtn.addEventListener('click', startRun);
+  cancelBtn.addEventListener('click', cancelRun);
+  downloadBtn.addEventListener('click', downloadCsv);
+})();
+</script>
+</body>
+</html>
