@@ -1,11 +1,5 @@
 # Price Matrix v2 — Python dependencies
 # Install:  pip install -r requirements.txt
-#
-# IMPORTANT: Selenium needs a real Chrome/Chromium browser installed on the
-# server — this is a system-level install, NOT something pip can provide.
-#   Ubuntu/Debian: sudo apt install -y google-chrome-stable
-#                  (or) sudo apt install -y chromium-browser chromium-chromedriver
-#   Windows/macOS: install Chrome normally from google.com/chrome
 
 # Web layer
 Flask>=3.0
@@ -13,7 +7,6 @@ flask-cors>=4.0
 
 # Scraping
 selenium>=4.20          # bundles Selenium Manager -> auto-downloads chromedriver
-webdriver-manager>=4.0  # fallback driver manager if Selenium Manager fails
 beautifulsoup4>=4.12
 lxml>=5.0               # much faster HTML parsing than html.parser
 
