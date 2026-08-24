@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Price Matrix — Amazon ⇄ Flipkart comparison engine</title>
+<meta name="description" content="Live price comparison across Amazon India and Flipkart with matching, analytics and export.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f59e0b'/%3E%3Cpath d='M8 23V15M14 23V9M20 23v-6M26 23V7' stroke='%23140f05' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  /* ===================================================================
+     Theme tokens — dark (default) + light, toggled on <html data-theme>
+     =================================================================== */
+  :root {
+    --bg: #090c12;
+    --panel: #10141d;
+    --panel-2: #161c28;
+    --panel-3: #1c2431;
+    --line: rgba(255,255,255,0.09);
+    --line-soft: rgba(255,255,255,0.05);
+    --text: #e9edf5;
+    --muted: #98a2b6;
+    --faint: #5f6a7e;
+    --accent: #f5b041;
+    --accent-2: #f98e1b;
+    --accent-ink: #221503;
+    --amazon: #ff9900;
+    --flipkart: #5f9eff;
+    --green: #34d399;
+    --red: #f87171;
+    --violet: #a78bfa;
+    --link: #7db4ff;
+    --shadow: 0 18px 50px -28px rgba(0,0,0,0.9);
+    --grid-line: rgba(255,255,255,0.025);
+    --hover: rgba(255,255,255,0.035);
+    --input-bg: rgba(255,255,255,0.045);
+    /* System font stacks — no external requests, so the page renders fully
+       offline and inside sandboxed previews that block remote fonts. */
+    --font-ui: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+    color-scheme: dark;
+  }
+  html[data-theme="light"] {
+    --bg: #f4f6fb;
+    --panel: #ffffff;
+    --panel-2: #f2f5fa;
+    --panel-3: #e8edf6;
+    --line: rgba(15,23,42,0.12);
+    --line-soft: rgba(15,23,42,0.07);
+    --text: #101828;
+    --muted: #53607a;
+    --faint: #8593ab;
+    --accent: #d97706;
+    --accent-2: #ea8a0b;
+    --accent-ink: #fffaf0;
+    --amazon: #d97706;
+    --flipkart: #2563eb;
+    --green: #059669;
+    --red: #dc2626;
+    --violet: #7c3aed;
+    --link: #1d4ed8;
+    --shadow: 0 14px 40px -26px rgba(15,23,42,0.45);
+    --grid-line: rgba(15,23,42,0.03);
+    --hover: rgba(15,23,42,0.035);
+    --input-bg: rgba(15,23,42,0.03);
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    transition: background .25s ease, color .25s ease;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace; }
+
+  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(760px 440px at 10% -6%, rgba(245,176,65,0.11), transparent 65%),
+      radial-gradient(700px 440px at 96% 6%, rgba(95,158,255,0.10), transparent 65%),
+      radial-gradient(900px 620px at 50% 118%, rgba(52,211,153,0.055), transparent 60%); }
+  .bg::after { content:""; position:absolute; inset:0;
+    background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse 92% 62% at 50% 0%, #000 30%, transparent 76%); }
+
+  .app { max-width: 1240px; margin: 0 auto; padding: 1.3rem 1.3rem 3rem; }
+  ::selection { background: rgba(245,176,65,0.35); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  .muted { color: var(--muted); } .small { font-size: 0.75rem; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  kbd { font-family: var(--font-mono); font-size: 0.7em; padding: 0.1em 0.45em;
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--panel-2); color: var(--muted); }
+
+  /* ---------------- Topbar ---------------- */
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.4rem 0.2rem 1.15rem; flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; gap:0.8rem; }
+  .logo { width:42px; height:42px; border-radius:12px; flex:none; display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 22px -8px rgba(245,158,11,0.7); }
+  .brand-name { font-weight:700; font-size:1.16rem; line-height:1.1; }
+  .brand-sub { font-size:0.71rem; color:var(--faint); letter-spacing:0.04em; }
+  .topbar-right { display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap; }
+
+  .status-pill { display:inline-flex; align-items:center; gap:0.5rem; font-size:0.75rem; font-weight:600;
+    padding:0.42rem 0.85rem; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--muted); }
+  .status-pill .dot { width:8px; height:8px; border-radius:50%; background:var(--faint); flex:none; }
+  .status-pill.run { color:var(--accent); border-color:rgba(245,176,65,0.42); }
+  .status-pill.run .dot { background:var(--accent); animation:blink 1.1s ease-in-out infinite; }
+  .status-pill.done { color:var(--green); border-color:rgba(52,211,153,0.38); }
+  .status-pill.done .dot { background:var(--green); }
+  .status-pill.error { color:var(--red); border-color:rgba(248,113,113,0.42); }
+  .status-pill.error .dot { background:var(--red); }
+  @keyframes blink { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.35;transform:scale(.78);} }
+
+  .icon-btn { width:38px; height:38px; border-radius:11px; border:1px solid var(--line); background:var(--panel);
+    color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .14s ease; }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); background:var(--panel-2); }
+
+  /* ---------------- Buttons ---------------- */
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; font-family:inherit;
+    font-weight:600; font-size:0.85rem; padding:0.64rem 1.1rem; border-radius:11px; border:1px solid transparent;
+    cursor:pointer; white-space:nowrap; transition: transform .12s ease, filter .15s ease, background .15s ease, border-color .15s ease; }
+  .btn svg { flex:none; }
+  .btn:active:not(:disabled) { transform: translateY(1px) scale(.99); }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
+    box-shadow: 0 8px 24px -10px rgba(245,158,11,0.6); }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.07); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; border-color: var(--line); color: var(--text); }
+  .btn-ghost:hover:not(:disabled) { background: var(--hover); border-color: var(--accent); }
+  .btn-danger { background: transparent; border-color: rgba(248,113,113,0.45); color: var(--red); }
+  .btn-danger:hover:not(:disabled) { background: rgba(248,113,113,0.1); }
+  .btn.small { padding:0.42rem 0.78rem; font-size:0.76rem; border-radius:9px; }
+  .spin { animation: rot .9s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  .split-btn { position:relative; display:inline-flex; }
+  .split-btn > .btn:first-child { border-top-right-radius:0; border-bottom-right-radius:0; }
+  .split-btn > .btn:last-child { border-top-left-radius:0; border-bottom-left-radius:0; border-left:none; padding-left:.55rem; padding-right:.6rem; }
+  .menu { position:absolute; top:calc(100% + 6px); right:0; min-width:190px; z-index:60; padding:.35rem;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  .menu[hidden] { display:none; }
+  .menu button { display:flex; align-items:center; gap:.55rem; width:100%; text-align:left; font-family:inherit;
+    font-size:.82rem; color:var(--text); background:none; border:none; padding:.5rem .6rem; border-radius:8px; cursor:pointer; }
+  .menu button:hover { background: var(--hover); color: var(--accent); }
+  .menu .sep { height:1px; background:var(--line-soft); margin:.3rem 0; }
+
+  /* ---------------- Panels ---------------- */
+  .panel { background: var(--panel); border:1px solid var(--line); border-radius:14px;
+    box-shadow: var(--shadow); margin-bottom:1.05rem; overflow:hidden; }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; gap:1rem;
+    padding:0.8rem 1.1rem; border-bottom:1px solid var(--line-soft); }
+  .panel-head h2 { margin:0; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.14em; color:var(--muted); }
+
+  /* ---------------- Search ---------------- */
+  .search-panel { padding:1.25rem 1.25rem 1.05rem; }
+  .search-grid { display:grid; grid-template-columns: 1fr 160px auto auto; gap:0.85rem; align-items:end; }
+  label.field-label { display:block; font-size:0.65rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.14em; color:var(--faint); margin-bottom:0.42rem; }
+  .input-icon { position:relative; }
+  .input-icon > svg { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:var(--faint); pointer-events:none; }
+  input[type="text"], input[type="number"], input[type="search"], select {
+    width:100%; font-family:inherit; font-size:0.92rem; color:var(--text);
+    background: var(--input-bg); border:1px solid var(--line); border-radius:11px; padding:0.64rem 0.85rem;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+  input::placeholder { color: var(--faint); }
+  input:focus, select:focus { outline:none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(245,176,65,0.16); }
+  .search-field input { font-size:1.02rem; padding:0.74rem 0.9rem 0.74rem 42px; }
+
+  .stepper { display:flex; align-items:stretch; border:1px solid var(--line); border-radius:11px; overflow:hidden; background:var(--input-bg); }
+  .stepper button { width:36px; border:none; background:transparent; color:var(--muted); font-size:1.05rem; cursor:pointer; }
+  .stepper button:hover { background: var(--hover); color: var(--text); }
+  .stepper input { border:none; background:transparent; text-align:center; padding:0.64rem 0.2rem; appearance:textfield; -moz-appearance:textfield; }
+  .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .stepper input:focus { box-shadow:none; }
+
+  .search-meta { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-top:0.85rem; }
+  .opt-row { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; font-size:0.78rem; color:var(--muted); }
+  .switch { display:inline-flex; align-items:center; gap:0.45rem; cursor:pointer; user-select:none; }
+  .switch input { position:absolute; opacity:0; width:0; height:0; }
+  .switch .track { width:34px; height:19px; border-radius:99px; background:var(--panel-3); border:1px solid var(--line);
+    position:relative; transition:background .18s ease, border-color .18s ease; flex:none; }
+  .switch .track::after { content:""; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%;
+    background:var(--faint); transition: transform .18s ease, background .18s ease; }
+  .switch input:checked + .track { background: rgba(245,176,65,0.28); border-color: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(15px); background: var(--accent); }
+
+  .chips-row { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.75rem; }
+  .qchip { font-family:inherit; font-size:0.73rem; font-weight:600; color:var(--muted); background:var(--input-bg);
+    border:1px solid var(--line); border-radius:999px; padding:0.3rem 0.7rem; cursor:pointer; transition:all .12s ease; }
+  .qchip:hover { color:var(--accent); border-color:var(--accent); }
+
+  .progress-wrap { margin-top:0.95rem; display:flex; align-items:center; gap:0.8rem; }
+  .progress { flex:1; height:6px; border-radius:99px; background:var(--panel-3); overflow:hidden; }
+  .progress-bar { height:100%; width:0%; border-radius:99px; background:linear-gradient(90deg, var(--accent-2), var(--accent), #ffd58a);
+    transition: width .4s ease; }
+  .progress-bar.indet { width:35% !important; animation: slide 1.15s ease-in-out infinite; }
+  @keyframes slide { 0%{margin-left:-38%;} 100%{margin-left:104%;} }
+  .progress-pct { font-family: var(--font-mono); font-size:0.75rem; color:var(--accent); min-width:38px; text-align:right; }
+
+  .alert { display:flex; gap:0.6rem; align-items:flex-start; margin-top:0.9rem; padding:0.65rem 0.85rem;
+    font-size:0.8rem; border-radius:10px; border:1px solid; }
+  .alert.warn { color:var(--accent); border-color:rgba(245,176,65,0.4); background:rgba(245,176,65,0.07); }
+  .alert.err { color:var(--red); border-color:rgba(248,113,113,0.4); background:rgba(248,113,113,0.07); }
+  .alert code { font-family: var(--font-mono); background:rgba(127,127,127,0.15); padding:.05em .35em; border-radius:4px; }
+
+  /* ---------------- KPIs ---------------- */
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap:0.85rem; margin-bottom:1.05rem; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:0.95rem 1.05rem 1rem;
+    position:relative; overflow:hidden; box-shadow:var(--shadow); }
+  .kpi::before { content:""; position:absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, var(--kc, var(--accent)), transparent 72%); }
+  .kpi-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+  .kpi-ico { width:29px; height:29px; border-radius:9px; flex:none; display:flex; align-items:center; justify-content:center;
+    color: var(--kc, var(--accent)); background: color-mix(in srgb, var(--kc, var(--accent)) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--kc, var(--accent)) 30%, transparent); }
+  .kpi-label { font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:var(--muted); }
+  .kpi-val { font-size:1.7rem; font-weight:700; line-height:1.15; font-variant-numeric:tabular-nums; }
+  .kpi-val.money { font-family: var(--font-mono); font-size:1.45rem; }
+  .kpi-sub { font-size:0.73rem; color:var(--faint); margin-top:0.25rem; }
+  .kpi-spark { position:absolute; right:10px; bottom:8px; opacity:.5; }
+
+  /* ---------------- Duo ---------------- */
+  .duo { display:grid; grid-template-columns: 1.5fr 1fr; gap:1.05rem; margin-bottom:1.05rem; }
+  .duo .panel { margin-bottom:0; display:flex; flex-direction:column; }
+  .tabs { display:inline-flex; gap:2px; padding:3px; background:var(--input-bg); border:1px solid var(--line); border-radius:10px; }
+  .tabs button { border:none; background:transparent; color:var(--muted); cursor:pointer; font-family:inherit;
+    font-size:0.72rem; font-weight:700; padding:0.28rem 0.62rem; border-radius:7px; transition:all .13s ease; }
+  .tabs button.active { background:var(--panel-3); color:var(--text); }
+  .legend { display:flex; gap:0.85rem; font-size:0.73rem; color:var(--muted); }
+  .legend .sw { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; }
+  .legend .sw.amz { background:var(--amazon); } .legend .sw.fk { background:var(--flipkart); }
+  .legend b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+  .chart-body { padding:0.85rem 1rem 0.5rem; flex:1; min-height:250px; }
+  .chart-body svg { width:100%; height:auto; display:block; }
+  .chart-body .grid { stroke: var(--line); stroke-dasharray:3 4; }
+  .chart-body .axis { fill: var(--faint); font-size:10px; font-family: var(--font-mono); }
+  .chart-body .bar-amz { fill: var(--amazon); opacity:.9; }
+  .chart-body .bar-fk { fill: var(--flipkart); opacity:.9; }
+  .chart-body rect, .chart-body circle { transition: opacity .15s ease; }
+  .chart-body rect:hover, .chart-body circle:hover { opacity:1; filter: brightness(1.18); }
+  .chart-empty { color:var(--faint); font-size:0.85rem; text-align:center; padding:3.4rem 1rem; }
+
+  .best-deal { display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap; margin:0 1rem 1rem; padding:0.6rem 0.8rem;
+    font-size:0.79rem; background:rgba(52,211,153,0.07); border:1px solid rgba(52,211,153,0.24); border-radius:10px; color:var(--muted); }
+  .best-deal b { color:var(--text); font-weight:600; }
+  .best-deal .price { font-family: var(--font-mono); color:var(--green); font-weight:700; }
+
+  .log { flex:1; min-height:230px; max-height:286px; overflow-y:auto; padding:0.75rem 1.05rem;
+    font-family: var(--font-mono); font-size:0.72rem; line-height:1.75; color:var(--muted); }
+  .log div { padding:1px 0; }
+  .log .l-err { color:var(--red); } .log .l-ok { color:var(--green); } .log .l-hi { color:var(--accent); }
+  .log .l-warn { color: var(--violet); } .log .dim { color:var(--faint); }
+  .log .ts { color:var(--faint); opacity:.65; margin-right:.5em; }
+  .log::-webkit-scrollbar, .table-scroll::-webkit-scrollbar, .chat-messages::-webkit-scrollbar, .drawer-body::-webkit-scrollbar { width:9px; height:9px; }
+  .log::-webkit-scrollbar-thumb, .table-scroll::-webkit-scrollbar-thumb, .chat-messages::-webkit-scrollbar-thumb, .drawer-body::-webkit-scrollbar-thumb {
+    background: var(--panel-3); border-radius:99px; border:2px solid var(--panel); }
+
+  /* ---------------- Toolbar ---------------- */
+  .toolbar { display:flex; align-items:center; justify-content:space-between; gap:0.9rem; flex-wrap:wrap;
+    padding:0.85rem 1.1rem; border-bottom:1px solid var(--line-soft); }
+  .segmented { display:inline-flex; padding:3px; gap:2px; background:var(--input-bg); border:1px solid var(--line); border-radius:11px; }
+  .segmented button { border:none; background:transparent; color:var(--muted); cursor:pointer; font-family:inherit;
+    font-size:0.78rem; font-weight:600; padding:0.4rem 0.82rem; border-radius:8px; transition:all .13s ease; }
+  .segmented button:hover { color:var(--text); }
+  .segmented button.active { background:var(--panel-3); color:var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .segmented button .cnt { font-size:.68rem; opacity:.65; margin-left:.3rem; }
+
+  .toolbar-fields { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; }
+  .toolbar-fields .input-icon.small > svg { left:10px; }
+  .toolbar-fields .input-icon.small input { padding:0.48rem 0.7rem 0.48rem 31px; font-size:0.81rem; width:200px; }
+  .price-inputs { display:flex; align-items:center; gap:0.35rem; }
+  .price-inputs span { color:var(--faint); }
+  .price-inputs input { width:88px; padding:0.48rem 0.6rem; font-size:0.79rem; }
+  .toolbar-fields select { width:auto; padding:0.48rem 2rem 0.48rem 0.7rem; font-size:0.79rem; font-weight:600; appearance:none; cursor:pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398a2b6' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position: right 0.7rem center; }
+  .filter-tags { display:flex; gap:.35rem; flex-wrap:wrap; padding:0 1.1rem; margin-top:.7rem; }
+  .ftag { display:inline-flex; align-items:center; gap:.35rem; font-size:.7rem; font-weight:600; color:var(--accent);
+    background:rgba(245,176,65,0.1); border:1px solid rgba(245,176,65,0.3); border-radius:999px; padding:.2rem .5rem .2rem .6rem; }
+  .ftag button { background:none; border:none; color:inherit; cursor:pointer; font-size:.85rem; line-height:1; padding:0 .1rem; opacity:.7; }
+  .ftag button:hover { opacity:1; }
+
+  .demo-banner { display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap; margin:0.85rem 1.1rem 0; padding:0.52rem 0.8rem;
+    font-size:0.77rem; border:1px dashed rgba(245,176,65,0.42); background:rgba(245,176,65,0.06); border-radius:10px; color:var(--accent); }
+  .demo-banner button.x { margin-left:auto; background:none; border:none; color:var(--faint); cursor:pointer; font-size:1rem; }
+
+  /* ---------------- Table ---------------- */
+  .table-scroll { overflow:auto; max-height:640px; }
+  table { width:100%; border-collapse:collapse; font-size:0.86rem; min-width:900px; }
+  thead th { position:sticky; top:0; z-index:2; text-align:left; font-size:0.65rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.11em; color:var(--faint); padding:0.7rem 0.9rem;
+    background:var(--panel); border-bottom:1px solid var(--line); white-space:nowrap; }
+  thead th.sortable { cursor:pointer; user-select:none; }
+  thead th.sortable:hover { color:var(--text); }
+  thead th .arr { opacity:0; margin-left:4px; }
+  thead th.sorted { color:var(--accent); } thead th.sorted .arr { opacity:1; }
+  thead th.num, td.num { text-align:right; }
+  tbody td { padding:0.65rem 0.9rem; border-bottom:1px solid var(--line-soft); vertical-align:middle; }
+  tbody tr { transition: background .12s ease; }
+  tbody tr:hover { background: var(--hover); }
+  tbody tr.best-row { background: rgba(52,211,153,0.06); box-shadow: inset 3px 0 0 var(--green); }
+  tbody tr.picked { background: rgba(167,139,250,0.09); box-shadow: inset 3px 0 0 var(--violet); }
+
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:0.24rem 0.58rem; border-radius:999px;
+    font-size:0.7rem; font-weight:700; white-space:nowrap; }
+  .chip i { width:7px; height:7px; border-radius:50%; flex:none; }
+  .chip-amz { color: var(--amazon); background: color-mix(in srgb, var(--amazon) 12%, transparent); border:1px solid color-mix(in srgb, var(--amazon) 32%, transparent); }
+  .chip-amz i { background: var(--amazon); }
+  .chip-fk { color: var(--flipkart); background: color-mix(in srgb, var(--flipkart) 12%, transparent); border:1px solid color-mix(in srgb, var(--flipkart) 34%, transparent); }
+  .chip-fk i { background: var(--flipkart); }
+
+  .prod-cell { display:flex; gap:0.65rem; align-items:flex-start; max-width:480px; }
+  .thumb { width:38px; height:38px; border-radius:8px; object-fit:contain; background:var(--panel-3);
+    border:1px solid var(--line-soft); flex:none; padding:2px; }
+  a.product-link { color:var(--link); text-decoration:none; font-weight:500; display:block; }
+  a.product-link:hover { text-decoration:underline; }
+  .prod-meta { display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.25rem; }
+  .spec-tag { font-size:0.66rem; font-family: var(--font-mono); color:var(--muted);
+    background:var(--panel-2); border:1px solid var(--line-soft); border-radius:5px; padding:0.06rem 0.34rem; }
+  .sponsor-tag { font-size:0.6rem; text-transform:uppercase; letter-spacing:.08em; color:var(--faint);
+    border:1px solid var(--line); border-radius:5px; padding:0.06rem 0.32rem; }
+  td .price-cell { font-family: var(--font-mono); font-weight:700; font-variant-numeric:tabular-nums; display:block; }
+  td .mrp-cell { font-size:0.7rem; color:var(--faint); text-decoration:line-through; }
+  td .off-cell { font-size:0.67rem; color:var(--green); font-weight:700; }
+
+  .diff-tag { font-family: var(--font-mono); font-size:0.73rem; font-weight:700; padding:0.16rem 0.46rem;
+    border-radius:7px; display:inline-block; cursor:help; }
+  .diff-cheaper { color:var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+  .diff-pricier { color:var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+  .diff-same { color:var(--muted); background: var(--panel-2); }
+
+  .rating-pill { display:inline-flex; align-items:center; gap:4px; font-family: var(--font-mono);
+    font-size:0.74rem; font-weight:700; color:var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent);
+    border:1px solid color-mix(in srgb, var(--accent) 26%, transparent); padding:0.16rem 0.46rem; border-radius:7px; }
+  .rev-count { display:block; font-size:0.65rem; color:var(--faint); margin-top:2px; }
+
+  .vbar { display:flex; align-items:center; gap:.45rem; justify-content:flex-end; }
+  .vbar .track { width:44px; height:5px; border-radius:99px; background:var(--panel-3); overflow:hidden; }
+  .vbar .fill { height:100%; border-radius:99px; background: linear-gradient(90deg, var(--accent-2), var(--green)); }
+  .vbar span { font-family: var(--font-mono); font-size:.72rem; font-weight:700; }
+
+  .best-tag { display:inline-block; margin-left:0.5rem; font-size:0.58rem; font-weight:700; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--green); border:1px solid rgba(52,211,153,0.42);
+    background:rgba(52,211,153,0.1); padding:0.1rem 0.42rem; border-radius:6px; vertical-align:middle; }
+
+  .empty-state { padding:3.2rem 1.5rem; text-align:center; color:var(--muted); }
+  .empty-state svg { color:var(--faint); margin-bottom:0.85rem; }
+  .empty-state h3 { margin:0 0 0.28rem; font-size:1rem; color:var(--text); }
+  .empty-state p { margin:0 0 1.1rem; font-size:0.84rem; color:var(--faint); }
+  .table-foot { padding:0.8rem 1.1rem; display:flex; align-items:center; justify-content:center; gap:.6rem; border-top:1px solid var(--line-soft); }
+
+  .sk-row { display:grid; grid-template-columns:100px 1fr 100px 110px 80px 80px; gap:1.1rem; padding:0.8rem 0.9rem; border-bottom:1px solid var(--line-soft); }
+  .sk { height:13px; border-radius:6px; background: linear-gradient(90deg, var(--panel-2), var(--panel-3), var(--panel-2));
+    background-size:200% 100%; animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { to { background-position:-200% 0; } }
+
+  .foot { text-align:center; font-size:0.71rem; color:var(--faint); padding-top:1rem; }
+  .foot a { color:var(--muted); }
+
+  /* ---------------- Drawer ---------------- */
+  .scrim { position:fixed; inset:0; background:rgba(0,0,0,.55); backdrop-filter: blur(2px); z-index:1100; animation: fade .18s ease; }
+  .scrim[hidden] { display:none; }
+  @keyframes fade { from { opacity:0; } }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(520px, 100vw); z-index:1101; display:flex; flex-direction:column;
+    background:var(--panel); border-left:1px solid var(--line); box-shadow:-20px 0 60px -30px rgba(0,0,0,.9); animation: slidein .22s ease; }
+  .drawer[hidden] { display:none; }
+  @keyframes slidein { from { transform: translateX(24px); opacity:0; } }
+  .drawer-head { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.1rem; border-bottom:1px solid var(--line-soft); }
+  .drawer-body { padding:1.1rem; overflow-y:auto; flex:1; }
+  .cmp-grid { display:grid; grid-template-columns:1fr 1fr; gap:.85rem; }
+  .cmp-card { border:1px solid var(--line); border-radius:12px; padding:.85rem; background:var(--panel-2); }
+  .cmp-card h4 { margin:.5rem 0 .3rem; font-size:.85rem; line-height:1.35; }
+  .cmp-card .big { font-family: var(--font-mono); font-size:1.3rem; font-weight:700; }
+  .cmp-verdict { margin-top:1rem; padding:.85rem; border-radius:12px; border:1px solid rgba(52,211,153,.3);
+    background:rgba(52,211,153,.07); font-size:.85rem; }
+  .cmp-verdict b { color:var(--green); }
+
+  /* ---------------- Chat ---------------- */
+  .chat-launcher { position:fixed; bottom:1.4rem; right:1.4rem; z-index:999; width:56px; height:56px; border-radius:50%;
+    background: linear-gradient(135deg, var(--panel-3), var(--panel)); border:1px solid var(--accent); color:var(--accent);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 10px 30px -8px rgba(0,0,0,.7), 0 0 0 4px rgba(245,176,65,.08); transition: transform .15s ease; }
+  .chat-launcher:hover { transform: scale(1.07); }
+  .chat-launcher .badge { position:absolute; top:-2px; right:-2px; width:14px; height:14px; border-radius:50%;
+    background:var(--green); border:2px solid var(--bg); }
+  .chat-window { position:fixed; bottom:5.3rem; right:1.4rem; z-index:1000; width:min(390px, calc(100vw - 2rem));
+    height:min(560px, calc(100vh - 7.4rem)); display:flex; flex-direction:column; overflow:hidden;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow: 0 24px 70px -18px rgba(0,0,0,.85); animation: pop .18s ease; }
+  @keyframes pop { from { opacity:0; transform: translateY(10px) scale(.98); } }
+  .chat-window.hidden { display:none; }
+  .chat-header { display:flex; align-items:center; justify-content:space-between; padding:0.8rem 1rem;
+    background:var(--panel-2); border-bottom:1px solid rgba(245,176,65,.26); }
+  .chat-title { font-weight:700; font-size:0.9rem; display:flex; align-items:center; gap:.4rem; }
+  .chat-sub { font-size:0.67rem; color:var(--faint); }
+  .chat-ctx { font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--green);
+    border:1px solid rgba(52,211,153,.35); background:rgba(52,211,153,.1); border-radius:5px; padding:.06rem .34rem; }
+  .chat-close { background:none; border:none; color:var(--muted); cursor:pointer; padding:0.22rem; border-radius:7px; display:flex; }
+  .chat-close:hover { color:var(--text); background:var(--hover); }
+  .chat-messages { flex:1; overflow-y:auto; padding:0.9rem; display:flex; flex-direction:column; gap:0.5rem; }
+  .chat-msg { max-width:88%; padding:0.55rem 0.8rem; border-radius:12px; font-size:0.82rem; line-height:1.5; word-break:break-word; }
+  .chat-msg.user { align-self:flex-end; border-bottom-right-radius:4px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink); font-weight:500; }
+  .chat-msg.bot { align-self:flex-start; border-bottom-left-radius:4px; background:var(--panel-2);
+    border:1px solid var(--line-soft); color:var(--text); white-space:pre-wrap; }
+  .chat-msg.bot a { color:var(--link); word-break:break-all; }
+  .chat-msg.bot strong { color: var(--accent); }
+  .chat-msg.typing { display:flex; gap:4px; align-items:center; padding:0.75rem 0.85rem; }
+  .chat-msg.typing i { width:6px; height:6px; border-radius:50%; background:var(--faint); animation: bounce 1s infinite; }
+  .chat-msg.typing i:nth-child(2){animation-delay:.15s;} .chat-msg.typing i:nth-child(3){animation-delay:.3s;}
+  @keyframes bounce { 0%,100%{transform:translateY(0);opacity:.5;} 50%{transform:translateY(-4px);opacity:1;} }
+  .chat-chips { display:flex; flex-wrap:wrap; gap:0.35rem; padding:0 0.85rem 0.6rem; }
+  .chat-chips button { font-family:inherit; font-size:0.69rem; font-weight:600; color:var(--muted);
+    background:var(--input-bg); border:1px solid var(--line); border-radius:999px; padding:0.3rem 0.65rem; cursor:pointer; transition:all .12s ease; }
+  .chat-chips button:hover { color:var(--accent); border-color:var(--accent); }
+  .chat-input-area { display:flex; gap:0.45rem; padding:0.7rem 0.85rem; border-top:1px solid var(--line-soft); }
+  .chat-input-area input { flex:1; padding:0.52rem 0.75rem; font-size:0.83rem; }
+  .chat-input-area .btn { padding:0.52rem 0.8rem; }
+
+  /* ---------------- Toasts ---------------- */
+  #toasts { position:fixed; top:1rem; right:1rem; z-index:1200; display:flex; flex-direction:column; gap:0.5rem; max-width:min(370px, calc(100vw - 2rem)); }
+  .toast { display:flex; gap:0.55rem; align-items:flex-start; background:var(--panel-2); border:1px solid var(--line);
+    border-left:3px solid var(--accent); border-radius:11px; padding:0.65rem 0.85rem; font-size:0.81rem; color:var(--text);
+    box-shadow: var(--shadow); animation: toast-in .22s ease; }
+  .toast.ok { border-left-color: var(--green); } .toast.err { border-left-color: var(--red); }
+  .toast.out { opacity:0; transform: translateX(12px); transition: all .3s ease; }
+  @keyframes toast-in { from { opacity:0; transform: translateX(14px); } }
+
+  @media (max-width: 980px) {
+    .duo { grid-template-columns:1fr; }
+    .search-grid { grid-template-columns:1fr; }
+    .search-grid .btn, .search-grid .split-btn { width:100%; }
+    .stepper { max-width:200px; }
+    .cmp-grid { grid-template-columns:1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+  @media print { .topbar, .search-panel, .duo, .toolbar, .chat-launcher, .chat-window, #toasts, .table-foot { display:none !important; } .panel { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#221503" stroke-width="2.6" stroke-linecap="round"><path d="M5 19v-6M10 19V6M15 19v-4M20 19V9"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Price Matrix</div>
+        <div class="brand-sub">Amazon ⇄ Flipkart comparison engine</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Idle</span></div>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle colour theme">
+        <svg id="themeIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <div class="split-btn">
+        <button id="downloadBtn" class="btn btn-ghost" disabled title="Export CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+        <button id="exportMore" class="btn btn-ghost" disabled aria-label="More export formats">
+          <svg width="11" height="7" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg>
+        </button>
+        <div class="menu" id="exportMenu" hidden>
+          <button data-fmt="csv">📄 CSV — comparison table</button>
+          <button data-fmt="xlsx">📊 XLSX — formatted + summary</button>
+          <button data-fmt="json">🧾 JSON — raw records</button>
+          <div class="sep"></div>
+          <button data-fmt="copy">📋 Copy visible rows</button>
+          <button data-fmt="print">🖨 Print / save as PDF</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======= Search ======= -->
+  <section class="panel search-panel">
+    <div class="search-grid">
+      <div class="search-field">
+        <label class="field-label" for="query">Search product</label>
+        <div class="input-icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <input type="text" id="query" placeholder='Try "gaming laptop rtx 4050" or "wireless earbuds"…' autofocus autocomplete="off" list="recentList">
+          <datalist id="recentList"></datalist>
+        </div>
+      </div>
+      <div>
+        <label class="field-label" for="pages">Pages / store</label>
+        <div class="stepper">
+          <button type="button" id="pagesMinus" aria-label="Fewer pages">−</button>
+          <input type="number" id="pages" value="2" min="1" max="10">
+          <button type="button" id="pagesPlus" aria-label="More pages">+</button>
+        </div>
+      </div>
+      <button id="runBtn" class="btn btn-primary">
+        <svg id="runIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span id="runLabel">Compare prices</span>
+      </button>
+      <button id="cancelBtn" class="btn btn-danger" hidden>Cancel</button>
+    </div>
+
+    <div class="search-meta">
+      <div class="opt-row">
+        <label class="switch"><input type="checkbox" id="optAmazon" checked><span class="track"></span>Amazon</label>
+        <label class="switch"><input type="checkbox" id="optFlipkart" checked><span class="track"></span>Flipkart</label>
+        <label class="switch"><input type="checkbox" id="optSponsored" checked><span class="track"></span>Include sponsored</label>
+        <label class="switch"><input type="checkbox" id="optHeadless" checked><span class="track"></span>Headless browser</label>
+      </div>
+      <div class="small" style="color:var(--faint)">Press <kbd>Enter</kbd> to run · <kbd>/</kbd> to focus · <kbd>Esc</kbd> to close panels</div>
+    </div>
+
+    <div class="chips-row" id="quickChips">
+      <button class="qchip" data-q="gaming laptop">gaming laptop</button>
+      <button class="qchip" data-q="wireless earbuds">wireless earbuds</button>
+      <button class="qchip" data-q="smartphone under 20000">smartphone under 20000</button>
+      <button class="qchip" data-q="4k monitor">4k monitor</button>
+      <button class="qchip" data-q="air fryer">air fryer</button>
+      <button class="qchip" data-q="smartwatch">smartwatch</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap" hidden>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-pct" id="progressPct">0%</div>
+    </div>
+
+    <div class="alert warn" id="healthAlert" hidden></div>
+  </section>
+
+  <!-- ======= KPIs ======= -->
+  <section class="kpis" aria-label="Key metrics">
+    <article class="kpi" style="--kc:#f5b041">
+      <div class="kpi-top"><span class="kpi-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span><span class="kpi-label">Listings parsed</span></div>
+      <div class="kpi-val" id="kpiTotal">—</div>
+      <div class="kpi-sub" id="kpiTotalSub">Run a search to begin</div>
+    </article>
+    <article class="kpi" style="--kc:#ff9900">
+      <div class="kpi-top"><span class="kpi-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 12 22 2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg></span><span class="kpi-label">Amazon · lowest</span></div>
+      <div class="kpi-val money" id="kpiAmzMin">—</div>
+      <div class="kpi-sub" id="kpiAmzSub">No data yet</div>
+    </article>
+    <article class="kpi" style="--kc:#5f9eff">
+      <div class="kpi-top"><span class="kpi-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 12 22 2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg></span><span class="kpi-label">Flipkart · lowest</span></div>
+      <div class="kpi-val money" id="kpiFkMin">—</div>
+      <div class="kpi-sub" id="kpiFkSub">No data yet</div>
+    </article>
+    <article class="kpi" style="--kc:#34d399">
+      <div class="kpi-top"><span class="kpi-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16"/></svg></span><span class="kpi-label">Cheapest platform</span></div>
+      <div class="kpi-val" id="kpiBestStore">—</div>
+      <div class="kpi-sub" id="kpiBestSub">Awaiting results</div>
+    </article>
+    <article class="kpi" style="--kc:#a78bfa">
+      <div class="kpi-top"><span class="kpi-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span class="kpi-label">Median price</span></div>
+      <div class="kpi-val money" id="kpiMedian">—</div>
+      <div class="kpi-sub" id="kpiMedianSub">Across both stores</div>
+    </article>
+  </section>
+
+  <!-- ======= Chart + Log ======= -->
+  <div class="duo">
+    <section class="panel" aria-label="Price analytics">
+      <div class="panel-head">
+        <h2>Price analytics</h2>
+        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+          <div class="tabs" id="chartTabs">
+            <button class="active" data-chart="hist">Distribution</button>
+            <button data-chart="scatter">Price vs rating</button>
+            <button data-chart="brand">By brand</button>
+          </div>
+          <div class="legend"><span><i class="sw amz"></i>Amazon <b id="lgAmz">0</b></span><span><i class="sw fk"></i>Flipkart <b id="lgFk">0</b></span></div>
+        </div>
+      </div>
+      <div class="chart-body" id="chartBody">
+        <div class="chart-empty">Run a search to visualise the price spread across both stores.</div>
+      </div>
+      <div class="best-deal" id="bestDeal" hidden></div>
+    </section>
+
+    <section class="panel" aria-label="Scan log">
+      <div class="panel-head">
+        <h2>Live scan log</h2>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <span class="small muted" id="logCount"></span>
+          <button class="btn btn-ghost small" id="copyLogBtn" title="Copy log">Copy</button>
+        </div>
+      </div>
+      <div class="log" id="log" aria-live="polite"><div class="dim">Awaiting search command…</div></div>
+    </section>
+  </div>
+
+  <!-- ======= Results ======= -->
+  <section class="panel" aria-label="Comparison results">
+    <div class="panel-head">
+      <h2>Market comparison</h2>
+      <span class="small muted" id="rowCountLabel"></span>
+    </div>
+
+    <div class="toolbar" id="controlsWrap" hidden>
+      <div class="segmented" id="platformSeg" role="group" aria-label="Filter by store">
+        <button class="active" data-platform="all">All <span class="cnt" id="segAll"></span></button>
+        <button data-platform="Amazon">Amazon <span class="cnt" id="segAmz"></span></button>
+        <button data-platform="Flipkart">Flipkart <span class="cnt" id="segFk"></span></button>
+      </div>
+      <div class="toolbar-fields">
+        <div class="input-icon small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <input type="search" id="specFilterInput" placeholder="Filter… 16GB, i5, RTX">
+        </div>
+        <div class="price-inputs">
+          <input type="number" id="minPriceInput" placeholder="Min ₹" min="0">
+          <span>–</span>
+          <input type="number" id="maxPriceInput" placeholder="Max ₹" min="0">
+        </div>
+        <select id="sortSelect" aria-label="Sort results">
+          <option value="default">Sort: Best value</option>
+          <option value="asc">Price: Low → High</option>
+          <option value="desc">Price: High → Low</option>
+          <option value="rating">Rating: Best first</option>
+          <option value="reviews">Most reviewed</option>
+          <option value="discount">Biggest discount</option>
+          <option value="diff">Biggest cross-store gap</option>
+        </select>
+        <label class="switch small"><input type="checkbox" id="optMatchedOnly"><span class="track"></span>Matched only</label>
+        <label class="switch small"><input type="checkbox" id="optHideSponsored"><span class="track"></span>Hide sponsored</label>
+      </div>
+    </div>
+    <div class="filter-tags" id="filterTags"></div>
+
+    <div class="demo-banner" id="partialBanner" hidden style="border-style:solid;border-color:rgba(95,158,255,0.45);background:rgba(95,158,255,0.07);color:var(--flipkart)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="spin" style="flex:none"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+      <span id="partialText">Loading…</span>
+    </div>
+
+    <div class="demo-banner" id="demoBanner" hidden>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Viewing sample data — run a live search to replace it.
+      <button class="x" id="demoDismiss" aria-label="Dismiss">✕</button>
+    </div>
+
+    <div class="table-scroll">
+      <div id="resultsWrap">
+        <div class="empty-state">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          <h3>No results yet</h3>
+          <p>Enter a product above and hit <b>Compare prices</b> — or explore the UI with demo data.</p>
+          <button class="btn btn-ghost small" id="demoBtn">✦ Preview with sample data</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-foot" id="tableFoot" hidden>
+      <button class="btn btn-ghost small" id="moreBtn">Show more results</button>
+    </div>
+  </section>
+
+  <footer class="foot">Price Matrix v2 · live scrape, cross-store matching &amp; value scoring · not affiliated with Amazon or Flipkart</footer>
+</div>
+
+<!-- ======= Compare drawer ======= -->
+<div class="scrim" id="drawerScrim" hidden></div>
+<aside class="drawer" id="drawer" hidden role="dialog" aria-label="Product comparison">
+  <div class="drawer-head">
+    <div><div style="font-weight:700">Cross-store comparison</div><div class="small muted" id="drawerSub"></div></div>
+    <button class="chat-close" id="drawerClose" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<!-- ======= Chat ======= -->
+<button class="chat-launcher" id="chatLauncher" title="Ask the assistant" aria-label="Open assistant chat">
+  <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+  <span class="badge" id="chatBadge" hidden></span>
+</button>
+
+<div class="chat-window hidden" id="chatWindow" role="dialog" aria-label="Price Matrix assistant">
+  <div class="chat-header">
+    <div>
+      <div class="chat-title">Matrix Assistant <span class="chat-ctx" id="chatCtx" hidden>live data</span></div>
+      <div class="chat-sub">Ask about prices, filters &amp; results</div>
+    </div>
+    <button class="chat-close" id="chatClose" aria-label="Close chat">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="chat-messages" id="chatMessages"></div>
+  <div class="chat-chips" id="chatChips"></div>
+  <div class="chat-input-area">
+    <input type="text" id="chatInput" placeholder="Type a question…" autocomplete="off">
+    <button class="btn btn-primary" id="chatSend" aria-label="Send message">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+
+  /* ================= config ================= */
+  // Same-origin whenever this page is served over http(s) — the Flask app serves
+  // index.html itself, so relative calls work locally AND behind any proxy/tunnel.
+  // Only a file:// open needs to reach out to the local dev port.
+  const API = (location.protocol === 'file:') ? 'http://127.0.0.1:8787' : '';
+
+  const LS = { theme: 'pm.theme', recent: 'pm.recent', opts: 'pm.opts' };
+  const PAGE_SIZE = 50;
+
+  let rawData = [], lastFiltered = [], currentJobId = null;
+  let evtSource = null, pollTimer = null, pollErrors = 0, demoMode = false, running = false, partialMode = false;
+  let logLines = [];
+  const state = { platform: 'all', sort: 'default', limit: PAGE_SIZE, matchedOnly: false, hideSponsored: false };
+
+  /* ================= utils ================= */
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const num = v => { if (v === null || v === undefined || v === '') return NaN;
+    const n = parseFloat(String(v).replace(/[^\d.\-]/g, '')); return Number.isFinite(n) ? n : NaN; };
+  const inr = n => Number.isFinite(n) ? '₹' + Math.round(n).toLocaleString('en-IN') : '—';
+  const kShort = v => v >= 1e5 ? (Math.round(v/1e4)/10) + 'L' : v >= 1000 ? (Math.round(v/100)/10).toString().replace(/\.0$/,'') + 'k' : String(Math.round(v));
+  const safeHref = u => /^https?:\/\//i.test(String(u||'')) ? String(u) : '';
+  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+  function toast(msg, type) {
+    const el = document.createElement('div');
+    el.className = 'toast ' + (type || '');
+    el.textContent = msg;
+    $('toasts').appendChild(el);
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 350); }, 4500);
+  }
+  function setStatus(cls, label) {
+    $('statusPill').className = 'status-pill' + (cls ? ' ' + cls : '');
+    $('statusText').textContent = label;
+  }
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  /* ================= theme ================= */
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    $('themeIco').innerHTML = t === 'light'
+      ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    store.set(LS.theme, t);
+    if (rawData.length) { drawChart(); }
+  }
+  applyTheme(store.get(LS.theme, 'dark'));
+  $('themeBtn').addEventListener('click', () =>
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+  /* ================= health check ================= */
+  // The banner must never go stale: Chrome may be installing in the background
+  // (Codespaces postCreate), or the backend may start after the page loads.
+  // While anything is degraded we re-poll, then clear/downgrade automatically.
+  let healthTimer = null, lastHealthKey = '', healthPolls = 0;
+
+  function healthAlertHtml(icon, body) {
+    return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" style="flex:none;margin-top:2px">' + icon + '</svg>' +
+      '<div>' + body + '</div>';
+  }
+
+  const ICON_WARN = '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>';
+  const ICON_BOLT = '<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>';
+  const ICON_DEAD = '<circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/>';
+
+  function scheduleHealthRecheck(degraded) {
+    if (healthTimer) { clearTimeout(healthTimer); healthTimer = null; }
+    if (!degraded) { healthPolls = 0; return; }
+    // Back off: 3s, 6s, 12s, 24s … capped at 30s, and stop after ~5 minutes.
+    healthPolls++;
+    if (healthPolls > 20) return;
+    const wait = Math.min(30000, 3000 * Math.pow(2, Math.min(3, healthPolls - 1)));
+    healthTimer = setTimeout(() => checkHealth({ silent: true }), wait);
+  }
+
+  async function checkHealth(opts) {
+    const silent = opts && opts.silent;
+    const box = $('healthAlert');
+    try {
+      const r = await fetch(API + '/api/health', { cache: 'no-store' });
+      if (!r.ok) throw new Error('bad status');
+      const h = await r.json();
+      const c = h.chrome || {};
+
+      // Key describes the *state*, so we only re-render when it actually changes.
+      const key = [h.scraper_ready, h.browser_fallback, h.fast_path].join('|');
+      const changed = key !== lastHealthKey;
+      const recovered = lastHealthKey && lastHealthKey !== key && h.scraper_ready && h.browser_fallback;
+
+      let degraded = true;
+      if (!h.scraper_ready) {
+        box.hidden = false;
+        box.className = 'alert err';
+        box.innerHTML = healthAlertHtml(ICON_WARN,
+          '<b>Scraper not ready.</b> ' +
+          (!c.selenium_available ? 'Selenium is missing — run <code>pip install -r requirements.txt</code>. ' : '') +
+          (!c.chrome_found ? 'Google Chrome was not found — install it, then restart the server. ' : '') +
+          'You can still explore the interface with sample data. ' +
+          '<button class="btn btn-ghost small" id="healthRetry" style="margin-left:.4rem">Re-check</button>');
+      } else if (!h.browser_fallback) {
+        box.hidden = false;
+        box.className = 'alert warn';
+        box.innerHTML = healthAlertHtml(ICON_BOLT,
+          '<b>Fast mode.</b> Pages are fetched over plain HTTP, which is much quicker. ' +
+          'Google Chrome isn\'t available, so any page that hits a bot-check is skipped ' +
+          'instead of retried in a browser.' +
+          '<div class="small" style="margin-top:.35rem;opacity:.85">Installing Chrome now? ' +
+          'This clears itself automatically. ' +
+          '<button class="btn btn-ghost small" id="healthRetry" style="margin-left:.3rem">Re-check</button></div>');
+      } else {
+        degraded = false;
+        box.hidden = true;
+        if (recovered && !silent) toast('Browser fallback is now available.', 'ok');
+        else if (recovered) toast('Chrome detected — browser fallback enabled.', 'ok');
+      }
+
+      const retry = $('healthRetry');
+      if (retry) retry.addEventListener('click', () => {
+        healthPolls = 0;
+        retry.textContent = 'Checking…';
+        checkHealth();
+      });
+
+      lastHealthKey = key;
+      scheduleHealthRecheck(degraded);
+      return h;
+    } catch (e) {
+      box.hidden = false;
+      box.className = 'alert err';
+      box.innerHTML = healthAlertHtml(ICON_DEAD,
+        '<b>Backend offline.</b> Start it with <code>python app.py</code>. ' +
+        'Sample data still works for exploring the UI. ' +
+        '<button class="btn btn-ghost small" id="healthRetry" style="margin-left:.4rem">Re-check</button>');
+      const retry = $('healthRetry');
+      if (retry) retry.addEventListener('click', () => { healthPolls = 0; checkHealth(); });
+      lastHealthKey = 'offline';
+      scheduleHealthRecheck(true);
+      return null;
+    }
+  }
+
+  // Re-check when the user returns to the tab — they may have just installed Chrome.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && lastHealthKey && lastHealthKey !== 'true|true|true') {
+      healthPolls = 0;
+      checkHealth({ silent: true });
+    }
+  });
+
+  /* ================= run ================= */
+  async function startRun() {
+    if (running) return;
+    const query = $('query').value.trim();
+    if (!query) { toast('Enter a product to search for.', 'err'); $('query').focus(); return; }
+
+    const platforms = [];
+    if ($('optAmazon').checked) platforms.push('amazon');
+    if ($('optFlipkart').checked) platforms.push('flipkart');
+    if (!platforms.length) { toast('Select at least one store.', 'err'); return; }
+
+    const pages = Math.min(10, Math.max(1, parseInt($('pages').value, 10) || 2));
+    $('pages').value = pages;
+    saveOpts(); pushRecent(query);
+
+    demoMode = false; $('demoBanner').hidden = true;
+    setRunning(true, 0);
+    setStatus('run', 'Starting…');
+    logLines = []; renderLog([{ t: Date.now()/1000, msg: '▸ Connecting to scraper backend…' }]);
+    showSkeleton();
+
+    try {
+      const res = await fetch(API + '/api/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, pages, platforms,
+          headless: $('optHeadless').checked, include_sponsored: $('optSponsored').checked })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRunning(false); setStatus('error', 'Cannot start');
+        renderLog([{ msg: 'ERROR: ' + (data.error || ('HTTP ' + res.status)) }]);
+        toast(data.error || ('Request failed: HTTP ' + res.status), 'err');
+        checkHealth(); showEmpty('Run could not start', data.error || 'The backend rejected the request.');
+        return;
+      }
+      currentJobId = data.job_id;
+      setStatus('run', 'Scanning stores…');
+      subscribe(currentJobId);
+    } catch (e) {
+      setRunning(false); setStatus('error', 'Backend offline');
+      renderLog([{ msg: '✕ Could not reach ' + (API || location.origin) },
+                 { msg: 'Start the Python server (python app.py) and try again.' }]);
+      toast('Backend not reachable. Is python app.py running?', 'err');
+      checkHealth(); showEmpty();
+    }
+  }
+
+  function setRunning(isRunning, pct) {
+    running = isRunning;
+    $('runBtn').disabled = isRunning;
+    $('cancelBtn').hidden = !isRunning;
+    $('progressWrap').hidden = !isRunning;
+    $('runLabel').textContent = isRunning ? 'Scanning…' : 'Compare prices';
+    $('runIco').classList.toggle('spin', isRunning);
+    if (isRunning) { setProgress(pct || 0); $('downloadBtn').disabled = true; $('exportMore').disabled = true; }
+  }
+  function setProgress(pct) {
+    const bar = $('progressBar');
+    if (pct <= 0) { bar.classList.add('indet'); $('progressPct').textContent = '…'; }
+    else { bar.classList.remove('indet'); bar.style.width = Math.min(100, pct) + '%'; $('progressPct').textContent = Math.round(pct) + '%'; }
+  }
+
+  /* --- SSE with polling fallback --- */
+  function subscribe(jobId) {
+    closeStreams();
+    if (typeof EventSource === 'undefined') { startPolling(jobId); return; }
+    try {
+      evtSource = new EventSource(API + '/api/stream/' + jobId);
+      let gotAnything = false;
+      const guard = setTimeout(() => { if (!gotAnything) { closeStreams(); startPolling(jobId); } }, 6000);
+
+      evtSource.addEventListener('log', e => { gotAnything = true; clearTimeout(guard);
+        try { renderLog(JSON.parse(e.data).lines); } catch (_) {} });
+      evtSource.addEventListener('progress', e => { gotAnything = true; clearTimeout(guard);
+        try { const p = JSON.parse(e.data).progress; setProgress(p); if (p > 0) setStatus('run', 'Scanning · ' + p + '%'); } catch (_) {} });
+      // A store finished — show its rows now instead of waiting for the other one.
+      evtSource.addEventListener('partial', e => { gotAnything = true; clearTimeout(guard);
+        try { const d = JSON.parse(e.data); applyPartial(d.rows, d.stores); } catch (_) {} });
+      evtSource.addEventListener('done', e => { gotAnything = true; clearTimeout(guard);
+        closeStreams(); try { finishJob(JSON.parse(e.data)); } catch (_) { startPolling(jobId); } });
+      evtSource.onerror = () => { if (!gotAnything) { clearTimeout(guard); closeStreams(); startPolling(jobId); } };
+    } catch (e) { startPolling(jobId); }
+  }
+
+  function startPolling(jobId) {
+    let since = 0, seenPartial = 0;
+    pollErrors = 0;
+    pollTimer = setInterval(async () => {
+      try {
+        const r = await fetch(API + '/api/status/' + jobId + '?since=' + since);
+        const job = await r.json();
+        pollErrors = 0;
+        if (job.log && job.log.length) { renderLog(job.log); }
+        since = job.log_seq || since;
+        setProgress(job.progress || 0);
+        if (job.is_partial && job.partial_seq > seenPartial) {
+          seenPartial = job.partial_seq;
+          applyPartial(job.data || [], job.partial_stores || []);
+        }
+        if (job.status === 'running') setStatus('run', 'Scanning · ' + (job.progress || 0) + '%');
+        if (['done', 'error', 'cancelled'].includes(job.status)) { closeStreams(); finishJob(job); }
+      } catch (e) {
+        if (++pollErrors > 8) { closeStreams(); setRunning(false); setStatus('error', 'Connection lost');
+          toast('Lost contact with the backend.', 'err'); }
+      }
+    }, 1000);
+  }
+
+  function closeStreams() {
+    if (evtSource) { try { evtSource.close(); } catch (e) {} evtSource = null; }
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  // Render one store's results while the next store is still being fetched.
+  function applyPartial(rows, stores) {
+    if (!rows || !rows.length) return;
+    rawData = rows;
+    partialMode = true;
+    const label = (stores && stores.length) ? stores.join(' + ') : 'partial';
+    setStatus('run', label + ' ready · ' + rows.length + ' listings');
+    $('partialBanner').hidden = false;
+    $('partialText').textContent =
+      label + ' loaded (' + rows.length + ' listings) — still fetching the other store…';
+    renderDashboard();
+  }
+
+  async function finishJob(job) {
+    setRunning(false);
+    partialMode = false;
+    $('partialBanner').hidden = true;
+    if (job.status === 'error') {
+      setStatus('error', 'Run failed');
+      toast(job.error || 'The scrape job failed.', 'err');
+      showEmpty('Scrape failed', job.error || 'Check the scan log for details.');
+      if (job.error_type === 'driver') checkHealth();
+      return;
+    }
+    let rows = job.data;
+    if (!rows) { // SSE 'done' payloads always include data, but be safe
+      try { const r = await fetch(API + '/api/status/' + job.job_id); rows = (await r.json()).data || []; }
+      catch (e) { rows = []; }
+    }
+    rawData = rows || [];
+    if (job.errors && Object.keys(job.errors).length) {
+      Object.entries(job.errors).forEach(([p, m]) => toast(p.toUpperCase() + ': ' + String(m).slice(0, 120), 'err'));
+    }
+    if (!rawData.length) {
+      setStatus('done', 'Done · 0 results');
+      toast('Finished, but no listings were parsed.', 'err');
+      showEmpty('No listings found', 'Both stores may have served a bot wall. Try fewer pages, a broader term, or disable headless mode once.');
+      return;
+    }
+    const suffix = job.status === 'cancelled' ? ' (cancelled)' : '';
+    setStatus('done', 'Done · ' + rawData.length + ' listings' + suffix);
+    toast(rawData.length + ' listings parsed in ' + (job.duration ?? '—') + 's.', 'ok');
+    $('downloadBtn').disabled = false; $('exportMore').disabled = false;
+    $('chatCtx').hidden = false; $('chatBadge').hidden = false;
+    loadChatChips();
+    renderDashboard();
+  }
+
+  async function cancelRun() {
+    if (!currentJobId) return;
+    $('cancelBtn').disabled = true;
+    try { await fetch(API + '/api/jobs/' + currentJobId + '/cancel', { method: 'POST' });
+      toast('Cancelling — finishing the current page…'); }
+    catch (e) { toast('Could not reach the backend to cancel.', 'err'); }
+    finally { setTimeout(() => { $('cancelBtn').disabled = false; }, 1500); }
+  }
+
+  /* ================= log ================= */
+  function renderLog(lines) {
+    if (!lines || !lines.length) return;
+    const box = $('log');
+    if (!logLines.length) box.innerHTML = '';
+    lines.forEach(entry => {
+      const msg = typeof entry === 'string' ? entry : (entry.msg || '');
+      const ts = (typeof entry === 'object' && entry.t)
+        ? new Date(entry.t * 1000).toLocaleTimeString('en-GB', { hour12: false }) : '';
+      logLines.push(msg);
+      const cls = /error|fail|exception|traceback|✕/i.test(msg) ? 'l-err'
+        : /⚠|warn|retry|block|captcha|timeout|skip/i.test(msg) ? 'l-warn'
+        : /done|complete|finished|parsed|collected|✓/i.test(msg) ? 'l-ok'
+        : /amazon|flipkart|fetch|page|scan|match/i.test(msg) ? 'l-hi' : '';
+      const div = document.createElement('div');
+      div.className = cls;
+      div.innerHTML = (ts ? '<span class="ts">' + ts + '</span>' : '') + esc(msg);
+      box.appendChild(div);
+    });
+    while (box.children.length > 400) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+    $('logCount').textContent = logLines.length + ' events';
+  }
+
+  /* ================= dashboard ================= */
+  function renderDashboard() {
+    $('controlsWrap').hidden = false;
+    updateKpis();
+    drawChart();
+    applyFilters(true);
+  }
+
+  function stats(rows, platform) {
+    const p = rows.filter(r => !platform || r.platform === platform)
+                  .map(r => num(r.price)).filter(n => Number.isFinite(n) && n > 0).sort((a,b) => a-b);
+    if (!p.length) return null;
+    const mid = Math.floor(p.length / 2);
+    return { count: p.length, min: p[0], max: p[p.length-1],
+      avg: p.reduce((a,b)=>a+b,0)/p.length,
+      median: p.length % 2 ? p[mid] : (p[mid-1]+p[mid])/2 };
+  }
+
+  function updateKpis() {
+    const a = stats(rawData, 'Amazon'), f = stats(rawData, 'Flipkart'), all = stats(rawData);
+    const aN = rawData.filter(r => r.platform === 'Amazon').length;
+    const fN = rawData.filter(r => r.platform === 'Flipkart').length;
+
+    $('kpiTotal').textContent = rawData.length.toLocaleString('en-IN');
+    $('kpiTotalSub').textContent = 'Amazon ' + aN + ' · Flipkart ' + fN;
+    $('segAll').textContent = rawData.length; $('segAmz').textContent = aN; $('segFk').textContent = fN;
+
+    $('kpiAmzMin').textContent = a ? inr(a.min) : '—';
+    $('kpiAmzSub').textContent = a ? 'avg ' + inr(a.avg) + ' · ' + a.count + ' priced' : 'No priced listings';
+    $('kpiFkMin').textContent = f ? inr(f.min) : '—';
+    $('kpiFkSub').textContent = f ? 'avg ' + inr(f.avg) + ' · ' + f.count + ' priced' : 'No priced listings';
+    $('kpiMedian').textContent = all ? inr(all.median) : '—';
+    $('kpiMedianSub').textContent = all ? inr(all.min) + ' – ' + inr(all.max) + ' range' : 'Across both stores';
+
+    let winner = '—', sub = 'Not enough price data';
+    if (a && f) {
+      if (a.min < f.min) { winner = 'Amazon'; sub = 'Save ' + inr(f.min - a.min) + ' vs Flipkart'; }
+      else if (f.min < a.min) { winner = 'Flipkart'; sub = 'Save ' + inr(a.min - f.min) + ' vs Amazon'; }
+      else { winner = 'Tied'; sub = 'Identical entry price'; }
+    } else if (a) { winner = 'Amazon'; sub = 'Only Amazon returned prices'; }
+    else if (f) { winner = 'Flipkart'; sub = 'Only Flipkart returned prices'; }
+    $('kpiBestStore').textContent = winner;
+    $('kpiBestSub').textContent = sub;
+
+    $('lgAmz').textContent = aN; $('lgFk').textContent = fN;
+  }
+
+  /* ================= charts ================= */
+  let chartMode = 'hist';
+  function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  function drawChart() {
+    const body = $('chartBody');
+    const pts = rawData.map(r => ({ p: num(r.price), rating: num(r.rating), platform: r.platform,
+        brand: (r.brand || '—'), title: r.title }))
+      .filter(d => Number.isFinite(d.p) && d.p > 0 && (d.platform === 'Amazon' || d.platform === 'Flipkart'));
+
+    // best deal strip
+    const priced = rawData.filter(r => Number.isFinite(num(r.price)) && num(r.price) > 0);
+    const bd = $('bestDeal');
+    if (priced.length) {
+      const best = priced.reduce((x, y) => num(x.price) <= num(y.price) ? x : y);
+      const t = String(best.title || 'Listing');
+      const href = safeHref(best.link);
+      bd.hidden = false;
+      bd.innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--green);flex:none"><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16"/></svg>' +
+        '<span>Best price: ' + (href ? '<a class="product-link" style="display:inline" target="_blank" rel="noopener" href="' + esc(href) + '">' : '<b>') +
+        esc(t.length > 62 ? t.slice(0, 62) + '…' : t) + (href ? '</a>' : '</b>') + '</span>' +
+        '<span class="price">' + inr(num(best.price)) + '</span>' +
+        '<span class="chip ' + (best.platform === 'Amazon' ? 'chip-amz' : 'chip-fk') + '"><i></i>' + esc(best.platform) + '</span>';
+    } else bd.hidden = true;
+
+    if (pts.length < 2) {
+      body.innerHTML = '<div class="chart-empty">Not enough priced listings to draw a chart.</div>';
+      return;
+    }
+    if (chartMode === 'scatter') return drawScatter(body, pts);
+    if (chartMode === 'brand') return drawBrand(body, pts);
+    return drawHist(body, pts);
+  }
+
+  function drawHist(body, pts) {
+    const vals = pts.map(d => d.p), lo = Math.min(...vals);
+    let hi = Math.max(...vals); if (hi === lo) hi = lo * 1.05 + 1;
+    const B = Math.min(8, Math.max(4, Math.round(Math.sqrt(pts.length)) + 1));
+    const step = (hi - lo) / B;
+    const buckets = Array.from({ length: B }, () => ({ Amazon: 0, Flipkart: 0 }));
+    pts.forEach(d => { buckets[Math.min(B-1, Math.floor((d.p - lo) / step))][d.platform]++; });
+    const maxC = Math.max(1, ...buckets.flatMap(b => [b.Amazon, b.Flipkart]));
+
+    const W = 640, H = 240, padL = 34, padR = 10, padT = 14, padB = 34;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const gw = plotW / B, bw = Math.min(24, gw * 0.3);
+
+    let grid = '', ticks = Math.min(4, maxC);
+    for (let t = 0; t <= ticks; t++) {
+      const y = (padT + plotH - plotH * t / ticks).toFixed(1);
+      grid += '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + y + '" y2="' + y + '" class="grid"/>' +
+              '<text x="' + (padL-7) + '" y="' + (parseFloat(y)+3.5) + '" class="axis" text-anchor="end">' + Math.round(maxC*t/ticks) + '</text>';
+    }
+    let bars = '', labels = '';
+    buckets.forEach((b, i) => {
+      const cx = padL + gw*i + gw/2;
+      const hA = b.Amazon/maxC*plotH, hF = b.Flipkart/maxC*plotH;
+      const range = '₹' + kShort(lo+step*i) + '–' + kShort(lo+step*(i+1));
+      bars += '<rect x="' + (cx-bw-2).toFixed(1) + '" y="' + (padT+plotH-hA).toFixed(1) + '" width="' + bw.toFixed(1) +
+              '" height="' + Math.max(hA, b.Amazon?2.5:0).toFixed(1) + '" rx="3" class="bar-amz">' +
+              (b.Amazon ? '<title>Amazon · ' + range + ' · ' + b.Amazon + ' listing(s)</title>' : '') + '</rect>';
+      bars += '<rect x="' + (cx+2).toFixed(1) + '" y="' + (padT+plotH-hF).toFixed(1) + '" width="' + bw.toFixed(1) +
+              '" height="' + Math.max(hF, b.Flipkart?2.5:0).toFixed(1) + '" rx="3" class="bar-fk">' +
+              (b.Flipkart ? '<title>Flipkart · ' + range + ' · ' + b.Flipkart + ' listing(s)</title>' : '') + '</rect>';
+      labels += '<text x="' + cx.toFixed(1) + '" y="' + (H-12) + '" class="axis" text-anchor="middle">₹' + kShort(lo+step*i) + '</text>';
+    });
+    body.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Price distribution by store">' + grid + bars + labels +
+      '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + (padT+plotH) + '" y2="' + (padT+plotH) + '" stroke="' + css('--line') + '"/></svg>';
+  }
+
+  function drawScatter(body, pts) {
+    const withR = pts.filter(d => Number.isFinite(d.rating) && d.rating > 0);
+    if (withR.length < 2) { body.innerHTML = '<div class="chart-empty">Not enough rated listings for this view.</div>'; return; }
+    const W = 640, H = 240, padL = 44, padR = 12, padT = 14, padB = 34;
+    const plotW = W-padL-padR, plotH = H-padT-padB;
+    const xs = withR.map(d => d.p), xlo = Math.min(...xs), xhi = Math.max(...xs) || 1;
+    const xr = (xhi - xlo) || 1;
+    const X = p => padL + ((p - xlo) / xr) * plotW;
+    const Y = r => padT + plotH - ((r - 3) / 2) * plotH;   // 3.0 → 5.0 band
+
+    let grid = '';
+    for (let r = 3; r <= 5; r += 0.5) {
+      const y = Y(r).toFixed(1);
+      grid += '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + y + '" y2="' + y + '" class="grid"/>' +
+              '<text x="' + (padL-7) + '" y="' + (parseFloat(y)+3.5) + '" class="axis" text-anchor="end">★' + r.toFixed(1) + '</text>';
+    }
+    for (let i = 0; i <= 4; i++) {
+      const p = xlo + xr*i/4;
+      grid += '<text x="' + X(p).toFixed(1) + '" y="' + (H-12) + '" class="axis" text-anchor="middle">₹' + kShort(p) + '</text>';
+    }
+    const dots = withR.map(d => {
+      const cy = Math.max(padT+3, Math.min(padT+plotH-3, Y(Math.max(3, Math.min(5, d.rating)))));
+      return '<circle cx="' + X(d.p).toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="5" fill="' +
+        (d.platform === 'Amazon' ? css('--amazon') : css('--flipkart')) + '" opacity="0.75">' +
+        '<title>' + esc(String(d.title).slice(0, 70)) + '\n' + inr(d.p) + ' · ★' + d.rating.toFixed(1) + ' · ' + d.platform + '</title></circle>';
+    }).join('');
+    body.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Price versus rating">' + grid + dots +
+      '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + (padT+plotH) + '" y2="' + (padT+plotH) + '" stroke="' + css('--line') + '"/></svg>' +
+      '<div class="small muted" style="text-align:center;margin-top:.2rem">Bottom-right = expensive &amp; poorly rated · top-left = the sweet spot</div>';
+  }
+
+  function drawBrand(body, pts) {
+    const map = new Map();
+    pts.forEach(d => {
+      const k = d.brand || '—';
+      if (!map.has(k)) map.set(k, []);
+      map.get(k).push(d.p);
+    });
+    let rows = [...map.entries()].map(([b, arr]) => ({ brand: b, n: arr.length, min: Math.min(...arr),
+      avg: arr.reduce((a,c)=>a+c,0)/arr.length }))
+      .filter(r => r.n >= 1).sort((a,b) => b.n - a.n).slice(0, 8).sort((a,b) => a.avg - b.avg);
+    if (rows.length < 2) { body.innerHTML = '<div class="chart-empty">Not enough brand variety for this view.</div>'; return; }
+
+    const W = 640, rowH = 26, padL = 96, padR = 60, padT = 8;
+    const H = padT + rows.length*rowH + 10;
+    const maxAvg = Math.max(...rows.map(r => r.avg));
+    const plotW = W - padL - padR;
+    const bars = rows.map((r, i) => {
+      const y = padT + i*rowH;
+      const w = Math.max(3, (r.avg/maxAvg) * plotW);
+      return '<text x="' + (padL-8) + '" y="' + (y+15) + '" class="axis" text-anchor="end">' + esc(r.brand.slice(0,13)) + '</text>' +
+        '<rect x="' + padL + '" y="' + (y+4) + '" width="' + w.toFixed(1) + '" height="15" rx="4" fill="' + css('--accent') + '" opacity="0.75">' +
+        '<title>' + esc(r.brand) + ' · ' + r.n + ' listings · avg ' + inr(r.avg) + ' · from ' + inr(r.min) + '</title></rect>' +
+        '<text x="' + (padL + w + 7) + '" y="' + (y+16) + '" class="axis">' + inr(r.avg) + '</text>';
+    }).join('');
+    body.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Average price by brand">' + bars + '</svg>' +
+      '<div class="small muted" style="text-align:center;margin-top:.3rem">Average price per brand (top 8 by listing count)</div>';
+  }
+
+  $('chartTabs').addEventListener('click', e => {
+    const b = e.target.closest('button[data-chart]'); if (!b) return;
+    $('chartTabs').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); chartMode = b.dataset.chart; drawChart();
+  });
+
+  /* ================= filters + table ================= */
+  function applyFilters(reset) {
+    if (!rawData.length) return;
+    if (reset) state.limit = PAGE_SIZE;
+
+    let out = rawData.slice();
+    if (state.platform !== 'all') out = out.filter(r => r.platform === state.platform);
+    if (state.matchedOnly) out = out.filter(r => num(r.match_score) > 0);
+    if (state.hideSponsored) out = out.filter(r => !r.sponsored);
+
+    const spec = $('specFilterInput').value.toLowerCase().trim();
+    if (spec) {
+      const terms = spec.split(/\s+/).filter(Boolean);
+      out = out.filter(r => {
+        const hay = (String(r.title||'') + ' ' + String(r.specs||'') + ' ' + String(r.brand||'')).toLowerCase().replace(/\s+/g,' ');
+        return terms.every(t => hay.includes(t) || hay.replace(/\s/g,'').includes(t.replace(/\s/g,'')));
+      });
+    }
+    const minV = parseFloat($('minPriceInput').value), maxV = parseFloat($('maxPriceInput').value);
+    out = out.filter(r => { const p = num(r.price); if (!Number.isFinite(p)) return true;
+      if (Number.isFinite(minV) && p < minV) return false;
+      if (Number.isFinite(maxV) && p > maxV) return false; return true; });
+
+    const price = r => { const p = num(r.price); return Number.isFinite(p) ? p : Infinity; };
+    const sorters = {
+      asc: (a,b) => price(a)-price(b),
+      desc: (a,b) => price(b)-price(a),
+      rating: (a,b) => (num(b.rating)||-1)-(num(a.rating)||-1) || (num(b.reviews)||0)-(num(a.reviews)||0),
+      reviews: (a,b) => (num(b.reviews)||0)-(num(a.reviews)||0),
+      discount: (a,b) => (num(b.discount_pct)||0)-(num(a.discount_pct)||0),
+      diff: (a,b) => Math.abs(num(b.price_diff)||0)-Math.abs(num(a.price_diff)||0),
+      default: (a,b) => (num(b.value_score)||0)-(num(a.value_score)||0) || price(a)-price(b),
+    };
+    out.sort(sorters[state.sort] || sorters.default);
+
+    lastFiltered = out;
+    renderFilterTags();
+    $('rowCountLabel').textContent = 'Showing ' + Math.min(out.length, state.limit) + ' of ' + out.length +
+      (out.length !== rawData.length ? ' (filtered from ' + rawData.length + ')' : '') + (demoMode ? ' · sample' : '');
+    renderTable(out);
+  }
+  const applyFiltersDebounced = debounce(() => applyFilters(true), 180);
+
+  function renderFilterTags() {
+    const tags = [];
+    if (state.platform !== 'all') tags.push(['platform', state.platform]);
+    if ($('specFilterInput').value.trim()) tags.push(['spec', '“' + $('specFilterInput').value.trim() + '”']);
+    if ($('minPriceInput').value) tags.push(['min', '≥ ' + inr(parseFloat($('minPriceInput').value))]);
+    if ($('maxPriceInput').value) tags.push(['max', '≤ ' + inr(parseFloat($('maxPriceInput').value))]);
+    if (state.matchedOnly) tags.push(['matched', 'matched pairs only']);
+    if (state.hideSponsored) tags.push(['sponsored', 'sponsored hidden']);
+    $('filterTags').innerHTML = tags.map(([k, label]) =>
+      '<span class="ftag">' + esc(label) + '<button data-clear="' + k + '" aria-label="Clear filter">✕</button></span>').join('');
+  }
+  $('filterTags').addEventListener('click', e => {
+    const b = e.target.closest('button[data-clear]'); if (!b) return;
+    const k = b.dataset.clear;
+    if (k === 'platform') { state.platform = 'all'; $('platformSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.platform === 'all')); }
+    if (k === 'spec') $('specFilterInput').value = '';
+    if (k === 'min') $('minPriceInput').value = '';
+    if (k === 'max') $('maxPriceInput').value = '';
+    if (k === 'matched') { state.matchedOnly = false; $('optMatchedOnly').checked = false; }
+    if (k === 'sponsored') { state.hideSponsored = false; $('optHideSponsored').checked = false; }
+    applyFilters(true);
+  });
+
+  function renderTable(rows) {
+    const wrap = $('resultsWrap');
+    if (!rows.length) {
+      wrap.innerHTML = '<div class="empty-state">' +
+        '<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>' +
+        '<h3>No matches</h3><p>Nothing fits the current filters — try widening the price range.</p></div>';
+      $('tableFoot').hidden = true; return;
+    }
+    let bestPrice = Infinity;
+    rows.forEach(r => { const p = num(r.price); if (Number.isFinite(p) && p > 0 && p < bestPrice) bestPrice = p; });
+
+    const slice = rows.slice(0, state.limit);
+    const sortIcon = k => (state.sort === k ? '↑' : state.sort === k + '_desc' ? '↓' : '↕');
+    let html = '<table><thead><tr>' +
+      '<th>Store</th><th>Product</th>' +
+      '<th class="num sortable' + (['asc','desc'].includes(state.sort)?' sorted':'') + '" data-sort="price">Price<span class="arr">' + (state.sort==='desc'?'↓':'↑') + '</span></th>' +
+      '<th class="num sortable' + (state.sort==='diff'?' sorted':'') + '" data-sort="diff">vs. other store<span class="arr">↕</span></th>' +
+      '<th class="num sortable' + (state.sort==='rating'?' sorted':'') + '" data-sort="rating">Rating<span class="arr">↓</span></th>' +
+      '<th class="num sortable' + (state.sort==='default'?' sorted':'') + '" data-sort="value">Value<span class="arr">↓</span></th>' +
+      '</tr></thead><tbody>';
+
+    slice.forEach((r, i) => {
+      const isAmz = r.platform === 'Amazon';
+      const p = num(r.price), mrp = num(r.mrp), off = num(r.discount_pct);
+      const isBest = Number.isFinite(p) && p > 0 && p === bestPrice;
+      const title = String(r.title || 'Product');
+      const href = safeHref(r.link);
+      const specs = String(r.specs || '').split('·').map(s => s.trim()).filter(Boolean).slice(0, 4);
+
+      const d = num(r.price_diff);
+      let diffHtml = '<span class="muted small">' + esc(String(r.price_diff_label || '—').replace(/·.*$/, '').trim() || '—') + '</span>';
+      if (Number.isFinite(d)) {
+        const cls = d < 0 ? 'diff-cheaper' : d > 0 ? 'diff-pricier' : 'diff-same';
+        const label = d === 0 ? 'same' : (d < 0 ? '−' : '+') + inr(Math.abs(d)).slice(1);
+        const ms = num(r.match_score);
+        diffHtml = '<span class="diff-tag ' + cls + '" title="' + esc(String(r.match_title || '').slice(0,110)) +
+          (Number.isFinite(ms) ? '&#10;match confidence ' + Math.round(ms*100) + '%' : '') + '">₹' + esc(label.replace(/^[+−]/, m => m)) + '</span>';
+      }
+
+      const rt = num(r.rating), rv = num(r.reviews);
+      const ratingHtml = Number.isFinite(rt)
+        ? '<span class="rating-pill">★ ' + rt.toFixed(1) + '</span>' + (Number.isFinite(rv) && rv ? '<span class="rev-count">' + rv.toLocaleString('en-IN') + '</span>' : '')
+        : '<span class="muted">—</span>';
+
+      const vs = num(r.value_score);
+      const valueHtml = Number.isFinite(vs)
+        ? '<div class="vbar"><div class="track"><div class="fill" style="width:' + Math.max(3, Math.min(100, vs)) + '%"></div></div><span>' + Math.round(vs) + '</span></div>'
+        : '<span class="muted">—</span>';
+
+      html += '<tr class="' + (isBest ? 'best-row' : '') + '" data-idx="' + i + '">' +
+        '<td><span class="chip ' + (isAmz ? 'chip-amz' : 'chip-fk') + '"><i></i>' + esc(r.platform || '—') + '</span></td>' +
+        '<td><div class="prod-cell">' +
+          (r.image ? '<img class="thumb" src="' + esc(r.image) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
+          '<div>' + (href ? '<a class="product-link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + esc(title) + ' ↗</a>'
+                          : '<span>' + esc(title) + '</span>') +
+          (isBest ? '<span class="best-tag">Best price</span>' : '') +
+          '<div class="prod-meta">' + specs.map(s => '<span class="spec-tag">' + esc(s) + '</span>').join('') +
+            (r.sponsored ? '<span class="sponsor-tag">Ad</span>' : '') +
+            (Number.isFinite(d) ? '<span class="spec-tag" style="cursor:pointer;color:var(--violet)" data-compare="' + i + '">⇄ compare</span>' : '') +
+          '</div></div></div></td>' +
+        '<td class="num"><span class="price-cell">' + (Number.isFinite(p) ? inr(p) : '—') + '</span>' +
+          (Number.isFinite(mrp) ? '<span class="mrp-cell">' + inr(mrp) + '</span> ' : '') +
+          (Number.isFinite(off) && off > 0 ? '<span class="off-cell">' + Math.round(off) + '% off</span>' : '') + '</td>' +
+        '<td class="num">' + diffHtml + '</td>' +
+        '<td class="num">' + ratingHtml + '</td>' +
+        '<td class="num">' + valueHtml + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+
+    const more = rows.length > state.limit;
+    $('tableFoot').hidden = !more;
+    if (more) $('moreBtn').textContent = 'Show ' + Math.min(PAGE_SIZE, rows.length - state.limit) + ' more (' + (rows.length - state.limit) + ' left)';
+
+    wrap.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (k === 'price') state.sort = state.sort === 'asc' ? 'desc' : 'asc';
+      else if (k === 'value') state.sort = 'default';
+      else state.sort = k;
+      $('sortSelect').value = ['asc','desc','rating','reviews','discount','diff','default'].includes(state.sort) ? state.sort : 'default';
+      applyFilters(true);
+    }));
+    wrap.querySelectorAll('[data-compare]').forEach(el => el.addEventListener('click', () => {
+      openCompare(lastFiltered[parseInt(el.dataset.compare, 10)]);
+    }));
+  }
+
+  function showSkeleton() {
+    let html = '';
+    for (let i = 0; i < 8; i++)
+      html += '<div class="sk-row"><div class="sk"></div><div class="sk" style="width:' + (60 + (i*9)%34) + '%"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>';
+    $('resultsWrap').innerHTML = html; $('tableFoot').hidden = true;
+  }
+  function showEmpty(title, sub) {
+    $('resultsWrap').innerHTML = '<div class="empty-state">' +
+      '<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>' +
+      '<h3>' + esc(title || 'No results yet') + '</h3><p>' + esc(sub || 'Run a search above, or explore the UI with demo data.') + '</p>' +
+      '<button class="btn btn-ghost small" id="demoBtn2">✦ Preview with sample data</button></div>';
+    $('tableFoot').hidden = true;
+    $('demoBtn2').addEventListener('click', loadDemo);
+  }
+
+  /* ================= compare drawer ================= */
+  function openCompare(row) {
+    if (!row) return;
+    const other = { title: row.match_title, price: num(row.price) - num(row.price_diff),
+      platform: row.platform === 'Amazon' ? 'Flipkart' : 'Amazon', link: row.match_link || '' };
+    const mine = { title: row.title, price: num(row.price), platform: row.platform, link: row.link,
+      rating: num(row.rating), reviews: num(row.reviews) };
+    const d = num(row.price_diff);
+    const cheaper = d === 0 ? null : (d < 0 ? mine.platform : other.platform);
+
+    $('drawerSub').textContent = 'Match confidence ' + Math.round((num(row.match_score) || 0) * 100) + '%';
+    const card = (o, extra) => '<div class="cmp-card">' +
+      '<span class="chip ' + (o.platform === 'Amazon' ? 'chip-amz' : 'chip-fk') + '"><i></i>' + esc(o.platform) + '</span>' +
+      '<h4>' + esc(String(o.title || '—').slice(0, 130)) + '</h4>' +
+      '<div class="big" style="color:' + (cheaper === o.platform ? 'var(--green)' : 'var(--text)') + '">' + inr(o.price) + '</div>' +
+      (extra || '') +
+      (safeHref(o.link) ? '<a class="product-link small" style="margin-top:.5rem" target="_blank" rel="noopener" href="' + esc(o.link) + '">Open listing ↗</a>' : '') +
+      '</div>';
+    const extraMine = (Number.isFinite(mine.rating) ? '<div class="small muted">★ ' + mine.rating.toFixed(1) +
+      (Number.isFinite(mine.reviews) ? ' · ' + mine.reviews.toLocaleString('en-IN') + ' reviews' : '') + '</div>' : '');
+
+    $('drawerBody').innerHTML = '<div class="cmp-grid">' + card(mine, extraMine) + card(other) + '</div>' +
+      '<div class="cmp-verdict">' + (cheaper
+        ? 'Buying on <b>' + esc(cheaper) + '</b> saves you <b>' + inr(Math.abs(d)) + '</b> (' +
+          Math.round(Math.abs(d) / Math.max(mine.price, other.price) * 100) + '% of the higher price).'
+        : 'Both stores list this at the same price — pick on delivery speed and return policy.') +
+      '</div>' +
+      '<p class="small muted" style="margin-top:1rem">Matches are computed from brand, model tokens and title similarity. ' +
+      'Always sanity-check the variant (RAM/storage/colour) before buying.</p>';
+    $('drawer').hidden = false; $('drawerScrim').hidden = false;
+  }
+  function closeDrawer() { $('drawer').hidden = true; $('drawerScrim').hidden = true; }
+  $('drawerClose').addEventListener('click', closeDrawer);
+  $('drawerScrim').addEventListener('click', closeDrawer);
+
+  /* ================= sample data ================= */
+  const SAMPLE = [
+    ['Amazon','HP','HP Pavilion 15 Intel Core i5 13th Gen 15.6" FHD Laptop, 16GB RAM, 512GB SSD',62990,71999,4.4,1842,'Core i5-13500H · 16GB · 512GB SSD · 15.6"'],
+    ['Amazon','Lenovo','Lenovo IdeaPad Slim 5 AMD Ryzen 7 7735HS, 16GB RAM, 1TB SSD, 16" WUXGA',72490,89990,4.5,932,'Ryzen 7 · 16GB · 1TB SSD · 16"'],
+    ['Amazon','ASUS','ASUS Vivobook 16X Intel i7 12th Gen with RTX 3050, 16GB RAM, 512GB SSD',84990,99990,4.3,411,'Core i7 · RTX 3050 · 16GB · 512GB SSD'],
+    ['Amazon','Acer','Acer Aspire Lite Intel i5 12th Gen, 16GB RAM, 512GB SSD, 15.6" FHD',48990,62999,4.1,2210,'Core i5 · 16GB · 512GB SSD · 15.6"'],
+    ['Amazon','Dell','Dell Inspiron 3530 Intel i5 13th Gen, 16GB RAM, 512GB SSD, 15.6" 120Hz',58490,70999,4.2,764,'Core i5 · 16GB · 512GB SSD · 120Hz'],
+    ['Amazon','Apple','Apple MacBook Air M2 13.6" Liquid Retina, 8GB Unified Memory, 256GB SSD',92900,114900,4.7,5312,'Apple M2 · 8GB · 256GB SSD · 13.6"'],
+    ['Amazon','MSI','MSI Thin GF63 Gaming Laptop Intel i5, RTX 4050 6GB, 16GB RAM, 512GB SSD',76990,94990,4.2,688,'Core i5 · RTX 4050 · 16GB · 144Hz'],
+    ['Amazon','Samsung','Samsung Galaxy Book4 Intel Core i5 13th Gen, 16GB RAM, 512GB SSD, 15.6"',66990,79990,4.3,289,'Core i5 · 16GB · 512GB SSD'],
+    ['Amazon','Infinix','Infinix Y1 Plus Intel i5 12th Gen, 16GB RAM, 512GB SSD, 15.6" FHD IPS',41990,58990,4.0,3120,'Core i5 · 16GB · 512GB SSD'],
+    ['Amazon','HP','HP Victus Gaming Intel i5 13th Gen RTX 4060, 16GB RAM, 512GB SSD, 144Hz',96490,119999,4.4,522,'Core i5 · RTX 4060 · 16GB · 144Hz'],
+    ['Flipkart','HP','HP 15s AMD Ryzen 5 5625U, 16GB RAM, 512GB SSD, 15.6" FHD Thin & Light',47990,58999,4.3,7841,'Ryzen 5 · 16GB · 512GB SSD · 15.6"'],
+    ['Flipkart','Lenovo','Lenovo IdeaPad Gaming 3 Intel i5 12th Gen RTX 3050, 16GB RAM, 512GB SSD',64990,89890,4.4,3320,'Core i5 · RTX 3050 · 16GB · 120Hz'],
+    ['Flipkart','ASUS','ASUS TUF Gaming F15 Intel i5 12th Gen RTX 4050, 16GB RAM, 512GB SSD, 144Hz',82990,109990,4.5,1902,'Core i5 · RTX 4050 · 16GB · 144Hz'],
+    ['Flipkart','Acer','Acer Nitro V Intel i5 13th Gen RTX 4050, 16GB DDR5, 512GB SSD, 144Hz',79990,104999,4.4,1140,'Core i5 · RTX 4050 · 16GB · 144Hz'],
+    ['Flipkart','Realme','Realme Book Prime Intel i5 11th Gen, 16GB RAM, 512GB SSD, 14" 2K Display',54990,74999,4.2,988,'Core i5 · 16GB · 512GB SSD · 14"'],
+    ['Flipkart','Dell','Dell G15 AMD Ryzen 5 6600H RTX 3050, 16GB RAM, 512GB SSD, 120Hz',69990,92990,4.1,655,'Ryzen 5 · RTX 3050 · 16GB · 120Hz'],
+    ['Flipkart','Apple','Apple MacBook Air M2 13.6" Retina, 8GB Unified Memory, 256GB SSD',89990,114900,4.7,4210,'Apple M2 · 8GB · 256GB SSD · 13.6"'],
+    ['Flipkart','Redmi','Redmi Book Prime Intel i5 12th Gen, 16GB RAM, 512GB SSD, 15.6" FHD',43990,59999,4.1,5644,'Core i5 · 16GB · 512GB SSD'],
+    ['Flipkart','HP','HP Victus Gaming Intel i5 13th Gen RTX 4060, 16GB RAM, 512GB SSD, 144Hz',92990,119999,4.4,2088,'Core i5 · RTX 4060 · 16GB · 144Hz'],
+    ['Flipkart','MSI','MSI Thin GF63 Core i5 12th Gen RTX 4050, 16GB RAM, 512GB SSD, 144Hz',74990,94990,4.2,410,'Core i5 · RTX 4050 · 16GB · 144Hz'],
+  ].map(([platform, brand, title, price, mrp, rating, reviews, specs]) => ({
+    platform, brand, title, price, mrp, rating, reviews, specs,
+    discount_pct: Math.round((mrp - price) / mrp * 100), link: '',
+    sponsored: false, image: '', match_title: '', match_score: 0, price_diff: null,
+    price_diff_label: 'No match', cheaper_on: '', value_score: 0,
+  }));
+
+  function computeSampleMatches(rows) {
+    const tok = s => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w => w.length > 2));
+    const amz = rows.filter(r => r.platform === 'Amazon'), fk = rows.filter(r => r.platform === 'Flipkart');
+    rows.forEach(r => {
+      const others = r.platform === 'Amazon' ? fk : amz;
+      const a = tok(r.title);
+      let best = null, bs = 0;
+      others.forEach(o => {
+        const b = tok(o.title);
+        const inter = [...a].filter(x => b.has(x)).length;
+        const s = inter / new Set([...a, ...b]).size * (r.brand === o.brand ? 1.6 : 0.4);
+        if (s > bs) { bs = s; best = o; }
+      });
+      if (best && bs > 0.35) {
+        r.match_title = best.title; r.match_score = Math.min(0.99, bs);
+        r.price_diff = r.price - best.price; r.match_link = '';
+        const opp = r.platform === 'Amazon' ? 'Flipkart' : 'Amazon';
+        r.cheaper_on = r.price_diff > 0 ? opp : r.price_diff < 0 ? r.platform : 'Tie';
+        r.price_diff_label = r.price_diff === 0 ? 'Same price on both'
+          : (r.price_diff > 0 ? '+' : '-') + '₹' + Math.abs(r.price_diff).toLocaleString('en-IN') + ' · cheaper on ' + r.cheaper_on;
+      }
+    });
+    const prices = rows.map(r => r.price), lo = Math.min(...prices), hi = Math.max(...prices), span = (hi-lo)||1;
+    rows.forEach(r => {
+      r.value_score = Math.round(100 * (0.42*(1-(r.price-lo)/span) + 0.30*(r.rating/5) +
+        0.16*Math.min(1, r.reviews/2000) + 0.12*((r.mrp-r.price)/r.mrp)) * 10) / 10;
+    });
+    return rows;
+  }
+
+  function loadDemo() {
+    demoMode = true; currentJobId = null; closeStreams(); setRunning(false);
+    rawData = computeSampleMatches(SAMPLE.map(r => Object.assign({}, r)));
+    setStatus('done', 'Sample data · ' + rawData.length + ' rows');
+    $('demoBanner').hidden = false;
+    $('downloadBtn').disabled = false; $('exportMore').disabled = false;
+    $('chatCtx').hidden = false;
+    logLines = [];
+    renderLog([{ msg: '✓ Loaded ' + rawData.length + ' sample listings (demo mode)' },
+               { msg: 'Start the backend with python app.py for live scrapes.' }]);
+    toast('Sample data loaded — run a live search to replace it.', 'ok');
+    loadChatChips();
+    renderDashboard();
+  }
+
+  /* ================= export ================= */
+  function rowsForExport() { return lastFiltered.length ? lastFiltered : rawData; }
+  function toCsv(rows) {
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const cols = ['platform','brand','title','price','mrp','discount_pct','rating','reviews','specs','value_score','price_diff','price_diff_label','cheaper_on','match_title','link'];
+    return cols.join(',') + '\n' + rows.map(r => cols.map(c => q(r[c])).join(',')).join('\n');
+  }
+  function downloadBlob(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  function doExport(fmt) {
+    $('exportMenu').hidden = true;
+    const rows = rowsForExport();
+    if (!rows.length) { toast('Nothing to export yet.', 'err'); return; }
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+
+    if (fmt === 'print') { window.print(); return; }
+    if (fmt === 'copy') {
+      navigator.clipboard.writeText(toCsv(rows))
+        .then(() => toast(rows.length + ' rows copied to clipboard.', 'ok'))
+        .catch(() => toast('Clipboard blocked by the browser.', 'err'));
+      return;
+    }
+    // Server-side export keeps XLSX formatting; fall back to client-side otherwise.
+    const filtered = rows.length !== rawData.length;
+    if (currentJobId && !demoMode && !filtered) {
+      window.open(API + '/api/download/' + currentJobId + '?format=' + fmt, '_blank');
+      return;
+    }
+    if (fmt === 'json') { downloadBlob(JSON.stringify(rows, null, 2), 'price-matrix-' + stamp + '.json', 'application/json'); }
+    else if (fmt === 'xlsx') {
+      if (currentJobId && !demoMode) { window.open(API + '/api/download/' + currentJobId + '?format=xlsx', '_blank');
+        toast('XLSX export includes all rows (filters apply to CSV/JSON only).'); }
+      else { downloadBlob(toCsv(rows), 'price-matrix-' + stamp + '.csv', 'text/csv;charset=utf-8');
+        toast('XLSX needs the backend — exported CSV instead.'); }
+    }
+    else { downloadBlob('\ufeff' + toCsv(rows), 'price-matrix-' + stamp + '.csv', 'text/csv;charset=utf-8'); }
+    toast(rows.length + ' rows exported.', 'ok');
+  }
+
+  /* ================= chat ================= */
+  function mdLite(text) {
+    let h = esc(text);
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    return h;
+  }
+  function chatBubble(text, cls) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg ' + cls;
+    if (cls === 'bot') div.innerHTML = mdLite(text); else div.textContent = text;
+    $('chatMessages').appendChild(div);
+    $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+    return div;
+  }
+  function loadChatChips() {
+    const has = rawData.length > 0;
+    const chips = has
+      ? ["What's the cheapest option?", 'Which store is cheaper?', 'Best value for money',
+         'Biggest discount', 'Biggest price differences', 'Average price']
+      : ['How do I use this?', 'What stores do you compare?', 'How do I export results?', 'What is the value score?'];
+    $('chatChips').innerHTML = chips.map(c => '<button>' + esc(c) + '</button>').join('');
+    $('chatChips').style.display = 'flex';
+  }
+  async function sendChat(text) {
+    const input = $('chatInput');
+    const msg = (text || input.value).trim();
+    if (!msg) return;
+    input.value = '';
+    chatBubble(msg, 'user');
+    const typing = document.createElement('div');
+    typing.className = 'chat-msg bot typing';
+    typing.innerHTML = '<i></i><i></i><i></i>';
+    $('chatMessages').appendChild(typing);
+    $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+
+    // Send the visible rows so the assistant answers against exactly what the user sees.
+    const context = (lastFiltered.length ? lastFiltered : rawData).slice(0, 400).map(r => ({
+      platform: r.platform, title: r.title, brand: r.brand, price: r.price, mrp: r.mrp,
+      discount_pct: r.discount_pct, rating: r.rating, reviews: r.reviews, specs: r.specs,
+      link: r.link, value_score: r.value_score, price_diff: r.price_diff,
+      match_score: r.match_score, cheaper_on: r.cheaper_on,
+    }));
+    try {
+      const res = await fetch(API + '/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, rows: context, job_id: currentJobId || '', query: $('query').value.trim() })
+      });
+      const data = await res.json();
+      typing.remove();
+      chatBubble(data.reply || 'Sorry, I could not process that.', 'bot');
+    } catch (e) {
+      typing.remove();
+      chatBubble(localAnswer(msg, context), 'bot');
+    }
+    loadChatChips();
+  }
+  // Offline fallback so the assistant still works without the backend (demo mode).
+  function localAnswer(msg, rows) {
+    const t = msg.toLowerCase();
+    if (!rows.length) return 'The assistant backend is offline. Start it with `python app.py`, or load sample data and ask me again.';
+    const priced = rows.filter(r => Number.isFinite(num(r.price)));
+    const money = n => inr(n);
+    if (/cheap|lowest|budget/.test(t)) {
+      const c = priced.slice().sort((a,b) => num(a.price)-num(b.price)).slice(0,3);
+      return 'Cheapest right now:\n' + c.map((r,i) => (i+1) + '. ' + r.title.slice(0,80) + '\n   ' + money(num(r.price)) + ' · ' + r.platform).join('\n');
+    }
+    if (/which store|cheaper overall|amazon or flipkart/.test(t)) {
+      const a = stats(rows,'Amazon'), f = stats(rows,'Flipkart');
+      if (!a || !f) return 'I only have listings from one store in this view.';
+      const w = a.min < f.min ? 'Amazon' : f.min < a.min ? 'Flipkart' : null;
+      return 'Amazon from ' + money(a.min) + ' (avg ' + money(a.avg) + ')\nFlipkart from ' + money(f.min) + ' (avg ' + money(f.avg) + ')\n' +
+        (w ? w + ' wins on entry price by ' + money(Math.abs(a.min-f.min)) + '.' : 'Both start at the same price.');
+    }
+    if (/value|recommend|best pick|worth/.test(t)) {
+      const b = rows.slice().sort((x,y) => (num(y.value_score)||0)-(num(x.value_score)||0))[0];
+      return 'My pick: ' + b.title.slice(0,90) + '\n' + money(num(b.price)) + ' on ' + b.platform + ' · value score ' + Math.round(num(b.value_score)||0) + '/100';
+    }
+    const s = stats(rows);
+    return s ? rows.length + ' listings · ' + money(s.min) + '–' + money(s.max) + ' · median ' + money(s.median) +
+      '\n(The backend is offline, so I am answering from the table in front of you.)' : 'No priced listings loaded.';
+  }
+
+  /* ================= recents + options ================= */
+  function pushRecent(q) {
+    const list = store.get(LS.recent, []).filter(x => x.toLowerCase() !== q.toLowerCase());
+    list.unshift(q);
+    store.set(LS.recent, list.slice(0, 12));
+    renderRecents();
+  }
+  function renderRecents() {
+    $('recentList').innerHTML = store.get(LS.recent, []).map(q => '<option value="' + esc(q) + '">').join('');
+  }
+  function saveOpts() {
+    store.set(LS.opts, { amazon: $('optAmazon').checked, flipkart: $('optFlipkart').checked,
+      sponsored: $('optSponsored').checked, headless: $('optHeadless').checked, pages: $('pages').value });
+  }
+  function loadOpts() {
+    const o = store.get(LS.opts, null); if (!o) return;
+    $('optAmazon').checked = o.amazon !== false;
+    $('optFlipkart').checked = o.flipkart !== false;
+    $('optSponsored').checked = o.sponsored !== false;
+    $('optHeadless').checked = o.headless !== false;
+    if (o.pages) $('pages').value = o.pages;
+  }
+
+  /* ================= wiring ================= */
+  $('runBtn').addEventListener('click', startRun);
+  $('cancelBtn').addEventListener('click', cancelRun);
+  $('query').addEventListener('keydown', e => { if (e.key === 'Enter') startRun(); });
+  $('quickChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-q]'); if (!b) return;
+    $('query').value = b.dataset.q; startRun();
+  });
+  $('pagesMinus').addEventListener('click', () => { $('pages').value = Math.max(1, (parseInt($('pages').value,10)||2) - 1); saveOpts(); });
+  $('pagesPlus').addEventListener('click', () => { $('pages').value = Math.min(10, (parseInt($('pages').value,10)||2) + 1); saveOpts(); });
+  ['optAmazon','optFlipkart','optSponsored','optHeadless'].forEach(id => $(id).addEventListener('change', saveOpts));
+
+  $('platformSeg').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-platform]'); if (!btn) return;
+    $('platformSeg').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); state.platform = btn.dataset.platform; applyFilters(true);
+  });
+  ['specFilterInput','minPriceInput','maxPriceInput'].forEach(id => $(id).addEventListener('input', applyFiltersDebounced));
+  $('sortSelect').addEventListener('change', () => { state.sort = $('sortSelect').value; applyFilters(true); });
+  $('optMatchedOnly').addEventListener('change', e => { state.matchedOnly = e.target.checked; applyFilters(true); });
+  $('optHideSponsored').addEventListener('change', e => { state.hideSponsored = e.target.checked; applyFilters(true); });
+  $('moreBtn').addEventListener('click', () => { state.limit += PAGE_SIZE; applyFilters(false); });
+
+  $('downloadBtn').addEventListener('click', () => doExport('csv'));
+  $('exportMore').addEventListener('click', e => { e.stopPropagation(); $('exportMenu').hidden = !$('exportMenu').hidden; });
+  $('exportMenu').addEventListener('click', e => { const b = e.target.closest('button[data-fmt]'); if (b) doExport(b.dataset.fmt); });
+  document.addEventListener('click', () => { $('exportMenu').hidden = true; });
+
+  $('copyLogBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText(logLines.join('\n')).then(() => toast('Log copied.', 'ok')).catch(() => toast('Clipboard blocked.', 'err'));
+  });
+  $('demoBtn').addEventListener('click', loadDemo);
+  $('demoDismiss').addEventListener('click', () => { $('demoBanner').hidden = true; });
+
+  $('chatLauncher').addEventListener('click', () => {
+    $('chatWindow').classList.toggle('hidden');
+    $('chatBadge').hidden = true;
+    if (!$('chatWindow').classList.contains('hidden')) $('chatInput').focus();
+  });
+  $('chatClose').addEventListener('click', () => $('chatWindow').classList.add('hidden'));
+  $('chatSend').addEventListener('click', () => sendChat());
+  $('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+  $('chatChips').addEventListener('click', e => { const b = e.target.closest('button'); if (b) sendChat(b.textContent); });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); $('query').focus(); }
+    if (e.key === 'Escape') { closeDrawer(); $('exportMenu').hidden = true; $('chatWindow').classList.add('hidden'); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); $('query').focus(); $('query').select(); }
+  });
+  window.addEventListener('beforeunload', closeStreams);
+
+  /* ================= boot ================= */
+  loadOpts(); renderRecents(); loadChatChips();
+  chatBubble("Hi! I'm the Matrix Assistant. Run a search and I'll answer questions about the actual results — try “cheapest under 60k” or “which store is cheaper?”.", 'bot');
+  checkHealth();
+})();
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a30345351a9f84c5',t:'MTc4NzU4NDA4NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+</body>
+</html>
