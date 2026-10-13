@@ -1,0 +1,11 @@
+# Price Matrix — Python dependencies
+# pip install -r requirements.txt
+
+Flask>=3.0            # web server: /api/run, SSE stream, exports (app.py + chatbot.py)
+pandas>=2.0           # CSV handling in parser.py / comparator.py
+beautifulsoup4>=4.12  # HTML parsing in parser.py
+selenium>=4.20        # browser automation in scrapper.py
+openpyxl>=3.1         # XLSX export in app.py (optional but recommended)
+
+# Selenium 4.6+ downloads the matching driver automatically (Selenium Manager),
+# but you still need Google Chrome installed on the machine.
