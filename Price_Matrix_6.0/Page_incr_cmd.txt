@@ -1,0 +1,8 @@
+# Allow up to 100 pages per store
+PM_MAX_PAGES=100 python app.py
+
+# Truly unbounded (up to 1000 safety limit)
+PM_MAX_PAGES=0 python app.py
+
+# On Windows PowerShell:
+$env:PM_MAX_PAGES="200"; python app.py
